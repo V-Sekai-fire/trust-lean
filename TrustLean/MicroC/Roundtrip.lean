@@ -357,8 +357,9 @@ theorem pIdent_exact (name : String) (rest : List Char)
     have htail : ∀ c ∈ tail, c.isAlpha = true ∨ c.isDigit = true ∨ c = '_' := by
       intro c hc; exact hcont c (by rw [hcs]; exact List.mem_cons_of_mem first hc)
     rw [pIdent_go_exact [] tail rest htail hrest]
-    simp
-    exact congrArg String.ofList (hcs.symm) |>.symm ▸ String.ofList_toList.symm ▸ rfl
+    have hrt := String.ofList_toList (s := name)
+    rw [hcs] at hrt
+    simpa using hrt
 
 /-! ### Universal roundtrip for finite subtypes -/
 
