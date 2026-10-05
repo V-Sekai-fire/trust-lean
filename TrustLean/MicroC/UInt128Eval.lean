@@ -95,6 +95,7 @@ def evalMicroCUnaryOp_uint128 (op : MicroCUnaryOp) (v : Value) : Option Value :=
 /-- Evaluate a MicroC expression with UInt128 wrapping at operation boundaries. -/
 def evalMicroCExpr_uint128 (env : MicroCEnv) : MicroCExpr → Option Value
   | .litInt n => some (.int n)
+  | .litU32 n => some (.int n.toNat)
   | .litBool b => some (.bool b)
   | .varRef name => some (env name)
   | .binOp op lhs rhs =>

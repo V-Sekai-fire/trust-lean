@@ -1062,6 +1062,7 @@ private theorem roundtrip_combined_rust (s : MicroCStmt) (hs : WFStmtRust s)
       -- Case split on expr type for pRustRhsF dispatch
       cases expr with
       | litBool b => exact absurd hrhs (by simp [AssignRhsSafeRust])
+      | litU32 m => cases he
       | arrayAccess a i => exact absurd hrhs (by simp [AssignRhsSafeRust])
       | powCall b k => exact absurd hrhs (by simp [AssignRhsSafeRust])
       | varRef v =>

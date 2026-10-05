@@ -26,7 +26,7 @@ namespace TrustLean
 
 /-- Expression depth for Rust parser: minimum fuel for pRustExprF. -/
 def rustExprDepth : MicroCExpr → Nat
-  | .litInt _ | .litBool _ | .varRef _ => 1
+  | .litInt _ | .litU32 _ | .litBool _ | .varRef _ => 1
   | .binOp _ l r => 1 + max (rustExprDepth l) (rustExprDepth r)
   | .unaryOp _ e => 1 + rustExprDepth e
   | .powCall base _ => 1 + rustExprDepth base
@@ -38,7 +38,7 @@ theorem rustExprDepth_pos (e : MicroCExpr) : rustExprDepth e ≥ 1 := by
 /-- Disambiguation predicate for Rust expressions:
     no neg(litInt n) with n >= 0 in any sub-expression. -/
 def NegLitDisamRust : MicroCExpr → Prop
-  | .litInt _ | .litBool _ | .varRef _ => True
+  | .litInt _ | .litU32 _ | .litBool _ | .varRef _ => True
   | .binOp _ l r => NegLitDisamRust l ∧ NegLitDisamRust r
   | .unaryOp .neg e => (∀ n : Int, n ≥ 0 → e ≠ .litInt n) ∧ NegLitDisamRust e
   | .unaryOp .lnot e => NegLitDisamRust e

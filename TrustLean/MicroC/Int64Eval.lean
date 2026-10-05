@@ -176,6 +176,7 @@ theorem evalMicroCBinOp_int64_shr_neg :
     powCall wraps through wrapInt64. -/
 def evalMicroCExpr_int64 (env : MicroCEnv) : MicroCExpr → Option Value
   | .litInt n => some (.int n)
+  | .litU32 n => some (.int n.toNat)
   | .litBool b => some (.bool b)
   | .varRef name => some (env name)
   | .binOp op e1 e2 =>
@@ -199,6 +200,9 @@ def evalMicroCExpr_int64 (env : MicroCEnv) : MicroCExpr → Option Value
 
 @[simp] theorem evalMicroCExpr_int64_litInt (env : MicroCEnv) (n : Int) :
     evalMicroCExpr_int64 env (.litInt n) = some (.int n) := rfl
+
+@[simp] theorem evalMicroCExpr_int64_litU32 (env : MicroCEnv) (n : UInt32) :
+    evalMicroCExpr_int64 env (.litU32 n) = some (.int n.toNat) := rfl
 
 @[simp] theorem evalMicroCExpr_int64_litBool (env : MicroCEnv) (b : Bool) :
     evalMicroCExpr_int64 env (.litBool b) = some (.bool b) := rfl

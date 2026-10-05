@@ -83,6 +83,7 @@ def microRustExprToString : MicroCExpr → String
   | .litInt n =>
     if n < 0 then "(" ++ "-" ++ String.ofList (natToChars n.natAbs) ++ ")"
     else String.ofList (natToChars n.toNat)
+  | .litU32 n => String.ofList (natToChars n.toNat)
   | .litBool true => "true"
   | .litBool false => "false"
   | .varRef name => name
