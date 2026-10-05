@@ -459,19 +459,23 @@ def checkTyped (cases : Array TypedCase) : IO Nat := do
     IO.println s!"{cases.size} typed programs: {values + reports} agree ({values} values, {reports} UBSan reports), {cases.size - values - reports} disagree"
     pure bad
 
-/-- Object-like macros the header defines with this compiler that `cReservedIdentifiers` leaves
-    out, other than the implementation's `_` names. A parameter or local with one of these names
-    expands. -/
-def unreservedMacros : IO (Except String (List String)) :=
+/-- The object-like macros `clang -dM -E` output defines, other than the implementation's `_`
+    names, and those of them `cReservedIdentifiers` leaves out. A parameter or local with one of
+    the latter names expands. An output without `CHAR_BIT` is an error, not an empty list. -/
+def macroNames (dump : String) : Except String (Nat × List String) :=
+  let names := (dump.splitOn "\n").filterMap fun l => match l.splitOn " " with
+    | "#define" :: n :: _ => if n.contains '(' || n.startsWith "_" then none else some n
+    | _ => none
+  if names.contains "CHAR_BIT" then .ok (names.length, names.filter (!cReservedIdentifiers.contains ·))
+  else .error "no #define CHAR_BIT in the output"
+
+def unreservedMacros : IO (Except String (Nat × List String)) :=
   IO.FS.withTempDir fun d => do
     IO.FS.writeFile (d / "header.c") (generateCHeader default)
     let out ← IO.Process.output {
       cmd := (← systemClang).toString, args := #["-std=c11", "-dM", "-E", (d / "header.c").toString] }
     if out.exitCode != 0 then return .error out.stderr
-    let names := (out.stdout.splitOn "\n").filterMap fun l => match l.splitOn " " with
-      | "#define" :: n :: _ => if n.contains '(' then none else some n
-      | _ => none
-    return .ok (names.filter fun n => !n.startsWith "_" && !cReservedIdentifiers.contains n)
+    return macroNames out.stdout
 
 def report : IO UInt32 := do
   let (random, rejected) := randomCases
@@ -482,8 +486,8 @@ def report : IO UInt32 := do
   IO.println s!"{emittedPrograms.length} emitted programs: {emittedPrograms.length - emittedBad} compile, {emittedBad} fail"
   let macrosBad ← match ← unreservedMacros with
     | .error diag => do IO.println s!"FAIL clang -dM -E of the header: {diag}"; pure 1
-    | .ok ms => do
-      IO.println s!"{ms.length} object-like macros the header defines here are not reserved, so a parameter named one expands: {ms.take 8}"
+    | .ok (seen, ms) => do
+      IO.println s!"{ms.length} of {seen} object-like macros the header defines here are not reserved, so a parameter named one expands: {ms.take 8}"
       pure 0
   pure (if typedBad == 0 && emittedBad == 0 && macrosBad == 0 && random.length == randomCount then 0 else 1)
 
@@ -540,8 +544,8 @@ def powerCase : TypedCase :=
 /-- Each control compiles or runs one program and says whether that must succeed. The failing
     ones plant undeclared locals, `stmtToC`, doubled condition parentheses, an unused helper, an
     unsuffixed `uint32_t` operand, a helper that squares past the last bit, a local typed by its
-    first write, parameters the body does not name, a macro as a parameter name, and an
-    undefined right operand of `&&`. -/
+    first write, parameters the body does not name, a macro as a parameter name, an undefined
+    right operand of `&&`, and a macro dump without `CHAR_BIT`. -/
 def controls : List (String × Bool × IO (Option String)) :=
   let compileOnly (src : String) : IO (Option String) :=
     IO.FS.withTempDir fun d => do
@@ -586,7 +590,16 @@ def controls : List (String × Bool × IO (Option String)) :=
    ("the same parameter printed as CHAR_BIT does not compile", false,
       compileOnly (replaceAll macroParam (varNameToC (.user "CHAR_BIT")) "CHAR_BIT")),
    ("a right operand of && that overflows where C skips it disagrees", false,
-      runOne skippedCase (typedProgram #[skippedCase]))]
+      runOne skippedCase (typedProgram #[skippedCase])),
+   ("macro names parse from #define lines", true,
+      pure (match macroNames "#define CHAR_BIT 8\n#define ARG_MAX 1\n#define _X 1\n#define F(x) x\n" with
+        | .ok (2, ["ARG_MAX"]) => none
+        | .ok (n, ms) => some s!"{n} names, unreserved {ms}"
+        | .error e => some e)),
+   ("an empty macro dump is an error", false,
+      pure (match macroNames "" with
+        | .error e => some e
+        | .ok (n, _) => if n == 0 then none else some s!"{n} names"))]
 
 def selfTest : IO UInt32 := do
   let mut failed := 0
