@@ -100,6 +100,14 @@ jobs:
       - name: Every emitted C program compiles under clang -Wall -Werror and typed programs compute what evalTyped says
         run: lake env lean --run scripts/CheckTypedC.lean
 
+      - name: The minimal example exports C that computes what Lean evaluates, and a wrong expected value fails
+        run: |
+          lake env lean --run examples/Export.lean export.c
+          clang -std=c11 -Wall -Werror export.c -o export
+          ./export
+          clang -std=c11 -Wall -Werror -DEXPECTED='f(7)+1' export.c -o export-wrong
+          if ./export-wrong; then echo "export-wrong exited 0"; exit 1; fi
+
       - name: Planted cast spellings fail the Rust cast harness
         run: lake env lean --run scripts/CheckRustCasts.lean --self-test
 

@@ -100,6 +100,16 @@ Requires Lean 4 toolchain and Mathlib.
 
 ## Examples
 
+### Minimal export
+
+`examples/Export.lean` lowers `3 + v0 * 5` through `Pipeline.emit` and writes a C file whose `main` exits 0 when `f(7)` equals `ArithExpr.eval`.
+
+```bash
+lake build
+lake env lean --run examples/Export.lean export.c
+clang -std=c11 -Wall -Werror export.c -o export && ./export
+```
+
 ### ArithExpr: Compile and verify
 
 ```lean
