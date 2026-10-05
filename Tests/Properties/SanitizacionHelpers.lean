@@ -29,7 +29,7 @@ example : sanitizeIdentifier (sanitizeIdentifier "main") = sanitizeIdentifier "m
 example : sanitizeIdentifier (sanitizeIdentifier "_x") = sanitizeIdentifier "_x" := by decide
 
 -- P0, INVARIANT: idempotency on wider set via #eval
-#eval do
+#eval show IO Unit from do
   let inputs := ["hello", "while", "for", "int", "2bad", "", "a-b", "tl_x", "_x",
                   "main", "void", "!@#$%^", "v*o*i*d", "my_variable_name",
                   "abort", "NULL", "printf", "uint64_t", "bool", "true", "false"]
@@ -54,7 +54,7 @@ example : sanitizeIdentifier "foo42" = "foo42" := by decide
 example : sanitizeIdentifier "a" = "a" := by decide
 example : sanitizeIdentifier "z" = "z" := by decide
 
-#eval do
+#eval show IO Unit from do
   let validNonKeywords := ["hello", "my_var", "_x", "foo42", "a", "z",
                            "myFunc", "counter", "result_1", "data"]
   let mut failures := #[]
@@ -77,7 +77,7 @@ example : sanitizeIdentifier "void" = "tl_void" := by decide
 example : sanitizeIdentifier "2bad" = "tl_2bad" := by decide
 example : sanitizeIdentifier "" = "tl_empty" := by decide
 
-#eval do
+#eval show IO Unit from do
   let keywords := c99Keywords ++ cReservedExtra
   let mut failures := #[]
   for kw in keywords do
@@ -89,7 +89,7 @@ example : sanitizeIdentifier "" = "tl_empty" := by decide
   else
     IO.println s!"P3 INVARIANT: FAIL on {failures}"
 
-#eval do
+#eval show IO Unit from do
   let invalidIdents := ["", "2x", "3abc", "!@#", "0"]
   let mut failures := #[]
   for s in invalidIdents do
@@ -111,7 +111,7 @@ example : joinCode "" "" = "" := by decide
 example : joinCode "a" "b" = "a\nb" := by decide
 example : joinCode "hello" "world" = "hello\nworld" := by decide
 
-#eval do
+#eval show IO Unit from do
   -- Check joinCode skips empty strings correctly
   let tests := [("", "b", "b"), ("a", "", "a"), ("", "", ""),
                 ("a", "b", "a\nb"), ("x", "y", "x\ny")]

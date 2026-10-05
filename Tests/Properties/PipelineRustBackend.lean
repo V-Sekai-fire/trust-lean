@@ -51,37 +51,37 @@ private def containsSub (haystack needle : String) : Bool :=
 -- P0, INVARIANT: stmtToRust produces balanced braces
 
 -- P1-a: skip
-#eval do
+#eval show IO Unit from do
   let s := stmtToRust 0 Stmt.skip
   if balancedBraces s then IO.println "P1-a [PASS] skip has balanced braces"
   else IO.println s!"P1-a [FAIL] skip braces not balanced: '{s}'"
 
 -- P1-b: assign
-#eval do
+#eval show IO Unit from do
   let s := stmtToRust 0 (Stmt.assign (.temp 0) (.litInt 42))
   if balancedBraces s then IO.println "P1-b [PASS] assign has balanced braces"
   else IO.println s!"P1-b [FAIL] assign braces not balanced: '{s}'"
 
 -- P1-c: ite
-#eval do
+#eval show IO Unit from do
   let s := stmtToRust 0 (Stmt.ite (.litBool true) (.assign (.temp 0) (.litInt 1)) (.assign (.temp 0) (.litInt 2)))
   if balancedBraces s then IO.println "P1-c [PASS] ite has balanced braces"
   else IO.println s!"P1-c [FAIL] ite braces not balanced: '{s}'"
 
 -- P1-d: while
-#eval do
+#eval show IO Unit from do
   let s := stmtToRust 0 (Stmt.while (.litBool true) (.assign (.temp 0) (.litInt 1)))
   if balancedBraces s then IO.println "P1-d [PASS] while has balanced braces"
   else IO.println s!"P1-d [FAIL] while braces not balanced: '{s}'"
 
 -- P1-e: for_
-#eval do
+#eval show IO Unit from do
   let s := stmtToRust 0 (Stmt.for_ (.assign (.temp 0) (.litInt 0)) (.varRef (.temp 0)) (.assign (.temp 0) (.litInt 1)) (.skip))
   if balancedBraces s then IO.println "P1-e [PASS] for_ has balanced braces"
   else IO.println s!"P1-e [FAIL] for_ braces not balanced: '{s}'"
 
 -- P1-f: nested ite inside while
-#eval do
+#eval show IO Unit from do
   let inner := Stmt.ite (.litBool false) (.assign (.temp 0) (.litInt 1)) (.assign (.temp 1) (.litInt 2))
   let outer := Stmt.while (.litBool true) inner
   let s := stmtToRust 0 outer
@@ -89,13 +89,13 @@ private def containsSub (haystack needle : String) : Bool :=
   else IO.println s!"P1-f [FAIL] nested ite-in-while braces not balanced: '{s}'"
 
 -- P1-g: seq of multiple
-#eval do
+#eval show IO Unit from do
   let s := stmtToRust 0 (Stmt.seq (.assign (.temp 0) (.litInt 1)) (.seq (.assign (.temp 1) (.litInt 2)) (.assign (.temp 2) (.litInt 3))))
   if balancedBraces s then IO.println "P1-g [PASS] seq has balanced braces"
   else IO.println s!"P1-g [FAIL] seq braces not balanced: '{s}'"
 
 -- P1-h: store/load
-#eval do
+#eval show IO Unit from do
   let s := stmtToRust 0 (Stmt.store (.varRef (.user "arr")) (.litInt 0) (.litInt 42))
   let s2 := stmtToRust 0 (Stmt.load (.temp 0) (.varRef (.user "arr")) (.litInt 0))
   if balancedBraces s && balancedBraces s2 then IO.println "P1-h [PASS] store/load have balanced braces"
@@ -131,31 +131,31 @@ example : stmtToRust 1 (Stmt.seq (.skip) (.assign (.temp 0) (.litInt 42))) =
 -- P1, PRESERVATION: control flow keywords present in output
 
 -- P3-a: while keyword
-#eval do
+#eval show IO Unit from do
   let s := stmtToRust 0 (Stmt.while (.litBool true) (.skip))
   if containsSub s "while" then IO.println "P3-a [PASS] while keyword present"
   else IO.println s!"P3-a [FAIL] while keyword missing from: '{s}'"
 
 -- P3-b: if keyword
-#eval do
+#eval show IO Unit from do
   let s := stmtToRust 0 (Stmt.ite (.litBool true) (.skip) (.skip))
   if containsSub s "if" then IO.println "P3-b [PASS] if keyword present"
   else IO.println s!"P3-b [FAIL] if keyword missing from: '{s}'"
 
 -- P3-c: break keyword
-#eval do
+#eval show IO Unit from do
   let s := stmtToRust 0 Stmt.break_
   if containsSub s "break" then IO.println "P3-c [PASS] break keyword present"
   else IO.println s!"P3-c [FAIL] break keyword missing from: '{s}'"
 
 -- P3-d: continue keyword
-#eval do
+#eval show IO Unit from do
   let s := stmtToRust 0 Stmt.continue_
   if containsSub s "continue" then IO.println "P3-d [PASS] continue keyword present"
   else IO.println s!"P3-d [FAIL] continue keyword missing from: '{s}'"
 
 -- P3-e: return keyword
-#eval do
+#eval show IO Unit from do
   let s := stmtToRust 0 (Stmt.return_ (some (.litInt 42)))
   if containsSub s "return" then IO.println "P3-e [PASS] return keyword present"
   else IO.println s!"P3-e [FAIL] return keyword missing from: '{s}'"
@@ -172,7 +172,7 @@ example : stmtToRust 1 (Stmt.seq (.skip) (.assign (.temp 0) (.litInt 42))) =
 -- P1, EQUIVALENCE: if-true branch check
 -- NOT_YET_RUNNABLE as property -- the backend does not constant-fold.
 -- We verify that the output at least contains the then-branch content.
-#eval do
+#eval show IO Unit from do
   let thenBranch := Stmt.assign (.temp 0) (.litInt 99)
   let elseBranch := Stmt.assign (.temp 1) (.litInt 0)
   let fullIte := stmtToRust 0 (Stmt.ite (.litBool true) thenBranch elseBranch)
@@ -191,7 +191,7 @@ example : stmtToRust 1 (Stmt.seq (.skip) (.assign (.temp 0) (.litInt 42))) =
 
 -- P1, IDEMPOTENCY: sanitizeIdentifier idempotent
 
-#eval do
+#eval show IO Unit from do
   let testCases := ["hello", "while", "int", "123abc", "", "tl_foo", "a+b", "x__y",
                      "match", "return", "auto", "break", "if", "for"]
   let mut allPass := true

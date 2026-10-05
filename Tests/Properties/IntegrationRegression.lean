@@ -26,7 +26,7 @@ example : sanitizeIdentifier (sanitizeIdentifier "main") = sanitizeIdentifier "m
 example : sanitizeIdentifier (sanitizeIdentifier "bool") = sanitizeIdentifier "bool" := by decide
 example : sanitizeIdentifier (sanitizeIdentifier "true") = sanitizeIdentifier "true" := by decide
 
-#eval do
+#eval show IO Unit from do
   let allInputs := c99Keywords ++ cReservedExtra ++
     ["", "2x", "3abc", "!@#", "0", "a-b", "hello", "tl_x", "_x", "v*o*i*d",
      "my_func", "counter_1", "data", "result", "tl_empty"]
@@ -52,7 +52,7 @@ example : isValidCIdent (sanitizeIdentifier "!@#") = true := by decide
 example : isValidCIdent (sanitizeIdentifier "main") = true := by decide
 example : isValidCIdent (sanitizeIdentifier "tl_x") = true := by decide
 
-#eval do
+#eval show IO Unit from do
   let allInputs := c99Keywords ++ cReservedExtra ++
     ["", "2x", "3abc", "!@#", "0", "a-b", "hello", "tl_x", "_x", "v*o*i*d"]
   let mut failures := #[]
@@ -74,7 +74,7 @@ example : sanitizeIdentifier "int" ∉ c99Keywords := by decide
 example : sanitizeIdentifier "void" ∉ c99Keywords := by decide
 example : sanitizeIdentifier "main" ∉ c99Keywords := by decide
 
-#eval do
+#eval show IO Unit from do
   let allInputs := c99Keywords ++ cReservedExtra ++
     ["", "2x", "3abc", "!@#", "0", "a-b", "hello", "tl_x"]
   let keywords := c99Keywords ++ cReservedExtra
@@ -101,7 +101,7 @@ example : countChar '{' (stmtToC 0 (.for_ .skip (.litBool true) .skip .skip))
     = countChar '}' (stmtToC 0 (.for_ .skip (.litBool true) .skip .skip)) := by decide
 
 -- Broad coverage via #eval
-#eval do
+#eval show IO Unit from do
   let stmts : List Stmt := [
     .skip, .break_, .continue_,
     .return_ none, .return_ (some (.litInt 42)),
@@ -154,7 +154,7 @@ example : exprToC (.litInt 42) = exprToC (.litInt 42) := rfl
 example : exprToC (.binOp .add (.varRef (.user "x")) (.litInt 1))
     = exprToC (.binOp .add (.varRef (.user "x")) (.litInt 1)) := rfl
 
-#eval do
+#eval show IO Unit from do
   let stmts : List Stmt := [
     .skip, .break_, .continue_,
     .assign (.user "x") (.litInt 1),
