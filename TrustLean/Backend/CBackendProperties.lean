@@ -52,10 +52,13 @@ theorem exprToC_litInt_neg (n : Int) (h : n < 0) :
 
 /-! ## Header Properties (P0) -/
 
-/-- generateCHeader without power helper is exactly the base includes. -/
+/-- generateCHeader without power helper is exactly the includes and the static assertions. -/
 theorem generateCHeader_no_helper (cfg : CConfig) (h : cfg.includePowerHelper = false) :
     generateCHeader cfg =
-    "#include <stdint.h>\n#include <stdbool.h>\n#include <stdlib.h>" := by
+    "#include <stdint.h>\n#include <stdbool.h>\n#include <stdlib.h>\n#include <limits.h>\n\n" ++
+    "_Static_assert(INT_MAX < UINT32_MAX, \"uint32_t does not promote to int (C11 6.3.1.1p2)\");\n" ++
+    "_Static_assert(sizeof(unsigned) == 4 && UINT_MAX == UINT32_MAX, " ++
+    "\"a u-suffixed literal below 2^32 is a 32-bit unsigned int (C11 6.4.4.1p5)\");" := by
   unfold generateCHeader; simp [h]
 
 -- Note: generateCHeader_with_helper (includePowerHelper=true) extends the base

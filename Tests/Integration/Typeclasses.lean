@@ -47,8 +47,8 @@ def T1_codegen_assignments : IO Bool := do
 def T2_codegen_skip : IO Bool := do
   let cfg : CConfig := {}
   let code := BackendEmitter.emitStmt cfg 0 Stmt.skip
-  -- skip emits empty string
-  reportTest "T2_codegen_skip" (code == "")
+  -- skip emits the empty statement
+  reportTest "T2_codegen_skip" (code == ";")
 
 /-- T3 BASIC: Nested control flow (while containing if). -/
 def T3_codegen_nested_control : IO Bool := do
@@ -102,11 +102,9 @@ def T5_stmt_coverage : IO Bool := do
   let mut allNonEmpty := true
   for s in stmts do
     let code := BackendEmitter.emitStmt cfg 0 s
-    -- skip emits "", which is fine for that constructor
-    if code.isEmpty && !(match s with | Stmt.skip => true | _ => false) then
+    if code.isEmpty then
       allNonEmpty := false
-  -- All non-skip constructors should produce non-empty code
-  -- skip produces "" which is semantically correct
+  -- Every constructor produces non-empty code; skip is the empty statement ";"
   reportTest "T5_stmt_coverage" allNonEmpty
 
 /-- T6 EDGE_CASE: Code generation for memory operations (load/store). -/

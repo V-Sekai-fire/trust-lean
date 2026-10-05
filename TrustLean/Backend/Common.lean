@@ -734,4 +734,19 @@ theorem sanitizeIdentifierRust_idempotent (s : String) :
     simp only [hnotdigit, hnotresOL]
     exact heq_r
 
+/-! ## C-Safe Variable Names (N9.2) -/
+
+/-- Convert VarName to a C identifier string. Valid user names that are not C-reserved
+    and do not start with `tl_` print unchanged; temps print `tl_t<k>`; every other
+    user name prints `tl_u` and its escape; array elements print `base[idx]`. -/
+def varNameToC : VarName → String
+  | .user s => userIdent cReservedIdentifiers s
+  | .temp k => tempIdent k
+  | .array base idx => base ++ "[" ++ toString idx ++ "]"
+
+/-- Distinct variables print to distinct C identifiers. -/
+theorem varNameToC_injective : Function.Injective varNameToC :=
+  varNameIdent_injective cReservedIdentifiers varNameToC
+    (fun _ => rfl) (fun _ => rfl) (fun _ _ => rfl)
+
 end TrustLean
