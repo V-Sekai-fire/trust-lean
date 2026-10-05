@@ -95,6 +95,9 @@ lake env lean --run scripts/CheckTypedC.lean
 # Fail unless printed uint32_t statements over an array compute what evalS32 says
 lake env lean --run scripts/CheckS32C.lean
 
+# Fail unless the exported ring functions compute what evalFunc_u32 says under ASan and UBSan
+lake env lean --run examples/Ring.lean
+
 # Run integration tests
 lake env lean TrustLean/Tests/Integration.lean
 ```
@@ -111,6 +114,25 @@ with `examples/driver.c` under `cc -std=c11 -Wall -Werror`, and fails unless it 
 
 ```bash
 lake build && lake env lean --run examples/Export.lean
+```
+
+### Functions with buffer parameters
+
+`examples/Ring.lean` exports `ring_push`, `ring_pop` and `ring_mask` with `emitFile` to
+`examples/out/ring.h` and `examples/out/ring.c`:
+
+```c
+uint32_t ring_push(uint32_t head, uint32_t tail, uint32_t mask, uint32_t *restrict buf, uint32_t v) {
+uint32_t occ = 0u; (void)occ;
+{ occ = (tail - head); if (mask < occ) { return tail; } else { buf[(tail & mask)] = v; return (tail + 1u); } }
+}
+```
+
+It then builds them under clang with ASan and UBSan and fails unless seeded calls print what
+`evalFunc_u32` computes.
+
+```bash
+lake build && lake env lean --run examples/Ring.lean
 ```
 
 ### ArithExpr: Compile and verify
@@ -176,6 +198,12 @@ with no range hypothesis, so a counter that wraps past 2^32 is covered. `evalMic
 `evalMicroC_uint64` and `evalMicroC_int64` are proved equal to its four instances, and
 `stmtToMicroC_correct_with` gives `stmtToMicroC_correct` with its `_uint32`, `_uint64` and
 `_int64` forms.
+
+A `MicroCFunc` (`MicroC/Func.lean`) has `uint32_t`, `bool` and `uint32_t *restrict` parameters,
+typed locals and a body; `master_func_roundtrip` parses the printed text of every function
+`WFFunc` accepts back to it. `evalFunc_u32` (`MicroC/FuncEval.lean`) runs a function on its
+arguments and is `none` when the body reads or writes a cell outside its buffer;
+`evalFunc_u32_correct` equates it with `evalFuncS32`, which computes on `UInt32`.
 
 ## Performance
 

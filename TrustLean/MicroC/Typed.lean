@@ -18,17 +18,20 @@ namespace TrustLean
 
 /-! ## Types and Declarations -/
 
-/-- The C types a typed program declares. -/
+/-- The C types a typed program declares, and `uint32_t *restrict`, which only a function
+    parameter has. -/
 inductive CType where
   | u32
   | i64
   | bool
+  | ptrU32
   deriving Repr, DecidableEq, Inhabited
 
 def CType.name : CType → String
   | .u32 => "uint32_t"
   | .i64 => "int64_t"
   | .bool => "bool"
+  | .ptrU32 => "uint32_t *restrict"
 
 def CType.ofName : String → Option CType
   | "uint32_t" => some .u32
@@ -38,7 +41,7 @@ def CType.ofName : String → Option CType
 
 /-- The literal a declaration initialises its variable to: `0u`, `0` or `false`. -/
 def CType.zero : CType → MicroCExpr
-  | .u32 => .litU32 0
+  | .u32 | .ptrU32 => .litU32 0
   | .i64 => .litInt 0
   | .bool => .litBool false
 
@@ -178,8 +181,9 @@ def declNameOk (x : String) : Bool :=
     c.isLower && cs.all isValidCIdentChar && !cReservedIdentifiers.contains x &&
       x != "power" && x.toList.take 6 != "return".toList
 
+/-- Distinct declared names, each of a scalar type. -/
 def declsOk (Γ : CDecls) : Bool :=
-  Γ.all (fun p => declNameOk p.1) && decide (Γ.map (·.1)).Nodup
+  Γ.all (fun p => declNameOk p.1) && decide (Γ.map (·.1)).Nodup && Γ.all (·.2 != .ptrU32)
 
 /-! ## Short-Circuit Operands -/
 
@@ -269,5 +273,12 @@ def declsToString : CDecls → String
 /-- The declarations, then the body as a compound statement. -/
 def printTyped (Γ : CDecls) (s : MicroCStmt) : String :=
   declsToString Γ ++ "{ " ++ microCToString s ++ " }"
+
+/-- What printed `uint32_t` code relies on: `uint32_t` arithmetic does not promote to `int`, and
+    `nu` is a `uint32_t` value. Needs `<stdint.h>` and `<limits.h>`. -/
+def uint32Asserts : String :=
+  "_Static_assert(INT_MAX < UINT32_MAX, \"uint32_t does not promote to int (C11 6.3.1.1p2)\");\n" ++
+    "_Static_assert(sizeof(unsigned) == 4 && UINT_MAX == UINT32_MAX, " ++
+    "\"a u-suffixed literal below 2^32 is a 32-bit unsigned int (C11 6.4.4.1p5)\");"
 
 end TrustLean

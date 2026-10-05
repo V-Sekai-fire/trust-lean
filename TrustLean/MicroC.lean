@@ -40,3 +40,6 @@ import TrustLean.MicroC.UnsignedSimulation
 import TrustLean.MicroC.Typed
 import TrustLean.MicroC.TypedRoundtrip
 import TrustLean.MicroC.TypedEval
+-- functions with buffer parameters
+import TrustLean.MicroC.Func
+import TrustLean.MicroC.FuncEval

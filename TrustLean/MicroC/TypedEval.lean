@@ -111,7 +111,7 @@ theorem exprTy_ne_i64 (Γ : CDecls) (hΓ : ∀ p ∈ Γ, p.2 ≠ .i64) :
       · cases tl with
         | i64 => exact exprTy_ne_i64 Γ hΓ l hs.1 vl hl
         | u32 => cases op <;> simp only [binOpTy] at h <;> (try split at h) <;> simp at h
-        | bool => cases op <;> simp [binOpTy] at h
+        | bool | ptrU32 => cases op <;> simp [binOpTy] at h
       · simp at h
     · simp at h
   | .unaryOp op e, hs, v => by
@@ -126,7 +126,7 @@ theorem exprTy_ne_i64 (Γ : CDecls) (hΓ : ∀ p ∈ Γ, p.2 ≠ .i64) :
           simp only [MicroCExpr.inU32Subset] at hs
           cases t with
           | i64 => exact exprTy_ne_i64 Γ hΓ e hs ve he
-          | u32 | bool => simp [unaryOpTy] at h
+          | u32 | bool | ptrU32 => simp [unaryOpTy] at h
         | lnot => cases t <;> simp [unaryOpTy] at h
         | widen32to64 | trunc64to32 => simp [MicroCExpr.inU32Subset] at hs
     · simp at h
@@ -220,11 +220,12 @@ theorem evalTyped_eq_evalMicroC_uint32 (Γ : CDecls) (s : MicroCStmt) (h : WellT
 
 /-! ## Every Variable Keeps a Value of Its Type -/
 
-/-- `v` is a value of C type `t`. -/
+/-- `v` is a value of C type `t`. A pointer's own entry holds no value the program reads. -/
 def CType.HasValue : CType → Value → Prop
   | .u32, .int n => 0 ≤ n ∧ n < 2 ^ 32
   | .i64, .int n => InInt64Range n
   | .bool, .bool _ => True
+  | .ptrU32, _ => True
   | _, _ => False
 
 /-- Every declared variable holds a value of its declared type. -/
