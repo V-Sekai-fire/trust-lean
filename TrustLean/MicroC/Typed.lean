@@ -181,12 +181,52 @@ def declNameOk (x : String) : Bool :=
 def declsOk (Γ : CDecls) : Bool :=
   Γ.all (fun p => declNameOk p.1) && decide (Γ.map (·.1)).Nodup
 
+/-! ## Short-Circuit Operands -/
+
+/-- `op` on operands of type `t` has no undefined case: `int64_t` arithmetic can overflow, and a
+    shift count that is not a literal can reach the width. -/
+def binOpDefined (op : MicroCBinOp) (r : MicroCExpr) (t : CType) : Bool :=
+  match op, t, r with
+  | .eqOp, _, _ | .ltOp, _, _ | .land, _, _ | .lor, _, _ => true
+  | .add, .u32, _ | .sub, .u32, _ | .mul, .u32, _ | .band, .u32, _ | .bor, .u32, _
+  | .bxor, .u32, _ => true
+  | .bshl, .u32, .litU32 _ | .bshr, .u32, .litU32 _ => true
+  | _, _, _ => false
+
+/-- `e` has a value in every environment where each variable holds a value of its type. -/
+def MicroCExpr.definedOn (Γ : CDecls) : MicroCExpr → Bool
+  | .binOp op l r => l.definedOn Γ && r.definedOn Γ &&
+    match exprTy Γ l with
+    | some (t, _) => binOpDefined op r t
+    | none => false
+  | .unaryOp .neg e => e.definedOn Γ && (exprTy Γ e).map (·.1) == some .u32
+  | .unaryOp _ e => e.definedOn Γ
+  | .powCall _ _ | .arrayAccess _ _ => false
+  | _ => true
+
+/-- The right operand of every `&&` and `||` is `definedOn Γ`. C evaluates it only when the left
+    operand does not decide the result, and `evalTyped` evaluates it always. -/
+def MicroCExpr.shortCircuitOk (Γ : CDecls) : MicroCExpr → Bool
+  | .binOp op l r => l.shortCircuitOk Γ && r.shortCircuitOk Γ &&
+    match op with
+    | .land | .lor => r.definedOn Γ
+    | _ => true
+  | .unaryOp _ e | .powCall e _ => e.shortCircuitOk Γ
+  | _ => true
+
+def MicroCStmt.shortCircuitOk (Γ : CDecls) : MicroCStmt → Bool
+  | .assign _ e => e.shortCircuitOk Γ
+  | .seq s1 s2 => s1.shortCircuitOk Γ && s2.shortCircuitOk Γ
+  | .ite c t e => c.shortCircuitOk Γ && t.shortCircuitOk Γ && e.shortCircuitOk Γ
+  | .while_ c b => c.shortCircuitOk Γ && b.shortCircuitOk Γ
+  | _ => true
+
 /-- `s` is a well-typed program body under the declarations `Γ`. -/
 def WellTyped (Γ : CDecls) (s : MicroCStmt) : Prop :=
-  declsOk Γ = true ∧ stmtTy Γ false s = true
+  declsOk Γ = true ∧ stmtTy Γ false s = true ∧ s.shortCircuitOk Γ = true
 
 instance (Γ : CDecls) (s : MicroCStmt) : Decidable (WellTyped Γ s) :=
-  inferInstanceAs (Decidable (_ ∧ _))
+  inferInstanceAs (Decidable (_ ∧ _ ∧ _))
 
 /-! ## The `uint32_t` Subset -/
 

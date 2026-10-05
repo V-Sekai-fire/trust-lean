@@ -277,7 +277,7 @@ theorem declsToString_length (Γ : CDecls) : Γ.length ≤ (declsToString Γ).to
 /-- **Typed roundtrip**: the declarations and body of a well-typed program parse back. -/
 theorem master_typed_roundtrip (Γ : CDecls) (s : MicroCStmt) (h : WellTyped Γ s) :
     parseTyped (printTyped Γ s) = some (Γ, s) := by
-  have ⟨hwf, hd⟩ := stmtTy_wf Γ h.1 false s h.2
+  have ⟨hwf, hd⟩ := stmtTy_wf Γ h.1 false s h.2.1
   have hnames := declsOk_names h.1
   have hcs : (printTyped Γ s).toList =
       (declsToString Γ).toList ++ '{' :: ' ' :: ((microCToString s).toList ++ [' ', '}']) := by
@@ -340,5 +340,17 @@ example : ¬ WellTyped [] .break_ := by decide
 /-- `power` takes an `int64_t` base only. -/
 example : ¬ WellTyped [("x", .u32)]
     (.assign "x" (.binOp .add (.varRef "x") (.powCall (.varRef "x") 2))) := by decide
+
+/-- C skips the right operand of `&&` when the left one is false, and `evalTyped` evaluates it,
+    so `(p + 1) < q`, which overflows at `p = INT64_MAX`, is not a right operand. -/
+example : ¬ WellTyped [("p", .i64), ("q", .i64), ("f", .bool)]
+    (.seq (.assign "p" (.litInt 9223372036854775807))
+      (.assign "f" (.binOp .land (.litBool false)
+        (.binOp .ltOp (.binOp .add (.varRef "p") (.litInt 1)) (.varRef "q"))))) := by decide
+
+/-- As the left operand, which C always evaluates, it is well typed. -/
+example : WellTyped [("p", .i64), ("q", .i64), ("f", .bool)]
+    (.assign "f" (.binOp .land (.binOp .ltOp (.binOp .add (.varRef "p") (.litInt 1)) (.varRef "q"))
+      (.binOp .ltOp (.varRef "p") (.varRef "q")))) := by decide
 
 end TrustLean

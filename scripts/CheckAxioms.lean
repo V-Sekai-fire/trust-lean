@@ -28,7 +28,7 @@ def required : Array Name := #[
   `TrustLean.evalMicroCBinOp_int64_add_eq_some, `TrustLean.evalMicroCBinOp_int64_add_maxInt64_one,
   `TrustLean.evalMicroCBinOp_uint32_shl_1_40,
   `TrustLean.master_typed_roundtrip, `TrustLean.evalTyped_eq_evalMicroC_uint32,
-  `TrustLean.evalTyped_preserves_types]
+  `TrustLean.evalTyped_preserves_types, `TrustLean.evalTypedExpr_definedOn]
 
 def isGateName (n : Name) : Bool :=
   match n with

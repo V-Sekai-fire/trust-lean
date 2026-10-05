@@ -359,6 +359,69 @@ theorem evalTypedExpr_typed (Γ : CDecls) (env : MicroCEnv) (henv : EnvTyped Γ 
     · simp at hty
   | .arrayAccess _ _, _, _, _, hty, _ => by simp [exprTy] at hty
 
+private theorem binOp_defined (op : MicroCBinOp) (l r : MicroCExpr) (t : CType) (vl vr : Bool)
+    (t' : CType) (r' : Bool) (hty : binOpTy op l r t vl vr = some (t', r'))
+    (hop : binOpDefined op r t = true) (v1 v2 : Value) (h1 : t.HasValue v1) (h2 : t.HasValue v2)
+    (hr : ∀ n, r = .litU32 n → v2 = .int n.toNat) :
+    ∃ v, tyBinOp (some (t, vl)) op v1 v2 = some v := by
+  cases t <;> cases v1 <;> cases v2 <;> simp only [CType.HasValue] at h1 h2 <;>
+    cases op <;> simp only [binOpTy, binOpDefined, reduceCtorEq] at hty hop <;>
+    simp [tyBinOp, evalMicroCBinOp_uint32, evalMicroCBinOp_int64]
+  all_goals
+    cases r <;> simp at hop
+    rename_i n
+    obtain rfl := Value.int.inj (hr n rfl)
+    simp only [shiftCountOk, decide_eq_true_eq] at hty
+    split at hty
+    · omega
+    · simp at hty
+
+/-- A well-typed expression that is `definedOn Γ` has a value wherever each variable holds a
+    value of its type. So `evalTyped`, which evaluates the right operand of `&&` and `||` that C
+    may skip, gives `none` only where C evaluates an undefined operation. -/
+theorem evalTypedExpr_definedOn (Γ : CDecls) (env : MicroCEnv) (henv : EnvTyped Γ env) :
+    ∀ (e : MicroCExpr) (t : CType) (r : Bool), exprTy Γ e = some (t, r) →
+      e.definedOn Γ = true → ∃ v, evalTypedExpr Γ env e = some v
+  | .litInt _, _, _, _, _ => ⟨_, rfl⟩
+  | .litU32 _, _, _, _, _ => ⟨_, rfl⟩
+  | .litBool _, _, _, _, _ => ⟨_, rfl⟩
+  | .varRef _, _, _, _, _ => ⟨_, rfl⟩
+  | .binOp op l r, t, rr, hty, hd => by
+    simp only [MicroCExpr.definedOn, Bool.and_eq_true] at hd
+    obtain ⟨⟨hdl, hdr⟩, hop⟩ := hd
+    simp only [exprTy] at hty
+    split at hty
+    · rename_i tl vl tr vr hl hr
+      split at hty
+      · rename_i htlr; subst htlr
+        obtain ⟨v1, h1⟩ := evalTypedExpr_definedOn Γ env henv l tl vl hl hdl
+        obtain ⟨v2, h2⟩ := evalTypedExpr_definedOn Γ env henv r tl vr hr hdr
+        rw [hl] at hop
+        simp only [evalTypedExpr, h1, h2, hl]
+        exact binOp_defined op l r tl vl vr t rr hty hop v1 v2
+          (evalTypedExpr_typed Γ env henv l tl vl v1 hl h1)
+          (evalTypedExpr_typed Γ env henv r tl vr v2 hr h2)
+          (fun n hn => by subst hn; simp only [evalTypedExpr, Option.some.injEq] at h2; exact h2.symm)
+      · simp at hty
+    · simp at hty
+  | .unaryOp op e, t, rr, hty, hd => by
+    simp only [exprTy] at hty
+    split at hty
+    · rename_i te ve he
+      split at hty
+      · simp at hty
+      · have hde : e.definedOn Γ = true := by
+          cases op <;> simp_all [MicroCExpr.definedOn]
+        obtain ⟨v1, h1⟩ := evalTypedExpr_definedOn Γ env henv e te ve he hde
+        have hv1 := evalTypedExpr_typed Γ env henv e te ve v1 he h1
+        simp only [evalTypedExpr, h1, he]
+        cases te <;> cases v1 <;> simp only [CType.HasValue] at hv1 <;>
+          cases op <;> simp_all [unaryOpTy, tyUnaryOp, evalMicroCUnaryOp_uint32,
+            evalMicroCUnaryOp_int64, MicroCExpr.definedOn]
+    · simp at hty
+  | .powCall _ _, _, _, _, hd => by simp [MicroCExpr.definedOn] at hd
+  | .arrayAccess _ _, _, _, _, hd => by simp [MicroCExpr.definedOn] at hd
+
 private theorem evalTyped_typed_step (Γ : CDecls) (fuel : Nat)
     (ihf : ∀ fuel' < fuel, ∀ (b : Bool) (s : MicroCStmt) (env env' : MicroCEnv) (oc : Outcome),
       EnvTyped Γ env → stmtTy Γ b s = true → evalTyped fuel' Γ env s = some (oc, env') →
@@ -449,7 +512,7 @@ theorem evalTyped_preserves_types (Γ : CDecls) (s : MicroCStmt) (h : WellTyped 
       (oc : Outcome), EnvTyped Γ env → stmtTy Γ b s = true → evalTyped fuel Γ env s = some (oc, env') →
       EnvTyped Γ env') fuel
     (fun fuel ihf b s => evalTyped_typed_step Γ fuel ihf s b) false s _ env' oc
-    (typedDefault_typed Γ) h.2 hrun
+    (typedDefault_typed Γ) h.2.1 hrun
 
 /-! ## Non-Vacuity -/
 
