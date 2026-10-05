@@ -348,19 +348,19 @@ theorem exprSafeR_sep (c : Char) (rest : List Char)
     rw [List.cons.injEq] at h; exact absurd h.1 hnp
 
 theorem exprSafeR_rparen (rest : List Char) : ExprSafeR (')' :: rest) :=
-  exprSafeR_sep ')' rest (by native_decide) (by native_decide) (by decide)
+  exprSafeR_sep ')' rest (by decide) (by decide) (by decide)
     (by decide) (by decide) ⟨by decide, by decide, by decide, by decide⟩
 
 theorem exprSafeR_rbracket (rest : List Char) : ExprSafeR (']' :: rest) :=
-  exprSafeR_sep ']' rest (by native_decide) (by native_decide) (by decide)
+  exprSafeR_sep ']' rest (by decide) (by decide) (by decide)
     (by decide) (by decide) ⟨by decide, by decide, by decide, by decide⟩
 
 theorem exprSafeR_comma (rest : List Char) : ExprSafeR (',' :: rest) :=
-  exprSafeR_sep ',' rest (by native_decide) (by native_decide) (by decide)
+  exprSafeR_sep ',' rest (by decide) (by decide) (by decide)
     (by decide) (by decide) ⟨by decide, by decide, by decide, by decide⟩
 
 theorem exprSafeR_semicolon (rest : List Char) : ExprSafeR (';' :: rest) :=
-  exprSafeR_sep ';' rest (by native_decide) (by native_decide) (by decide)
+  exprSafeR_sep ';' rest (by decide) (by decide) (by decide)
     (by decide) (by decide) ⟨by decide, by decide, by decide, by decide⟩
 
 /-! ## Char property helpers (local copies — private in MicroC.RoundtripExpr) -/
@@ -674,18 +674,18 @@ private theorem pRustParenF_fallthrough (k : Nat) (c : Char) (cs : List Char)
 
 /-! ## pBinOpR roundtrip -/
 
-@[simp] private theorem toList_add_op : ("+").toList = ['+'] := by native_decide
-@[simp] private theorem toList_sub_op : ("-").toList = ['-'] := by native_decide
-@[simp] private theorem toList_mul_op : ("*").toList = ['*'] := by native_decide
-@[simp] private theorem toList_eq_op : ("==").toList = ['=', '='] := by native_decide
-@[simp] private theorem toList_lt_op : ("<").toList = ['<'] := by native_decide
-@[simp] private theorem toList_land_op : ("&&").toList = ['&', '&'] := by native_decide
-@[simp] private theorem toList_lor_op : ("||").toList = ['|', '|'] := by native_decide
-@[simp] private theorem toList_band_op : ("&").toList = ['&'] := by native_decide
-@[simp] private theorem toList_bor_op : ("|").toList = ['|'] := by native_decide
-@[simp] private theorem toList_bxor_op : ("^").toList = ['^'] := by native_decide
-@[simp] private theorem toList_bshl_op : ("<<").toList = ['<', '<'] := by native_decide
-@[simp] private theorem toList_bshr_op : (">>").toList = ['>', '>'] := by native_decide
+@[simp] private theorem toList_add_op : ("+").toList = ['+'] := by decide
+@[simp] private theorem toList_sub_op : ("-").toList = ['-'] := by decide
+@[simp] private theorem toList_mul_op : ("*").toList = ['*'] := by decide
+@[simp] private theorem toList_eq_op : ("==").toList = ['=', '='] := by decide
+@[simp] private theorem toList_lt_op : ("<").toList = ['<'] := by decide
+@[simp] private theorem toList_land_op : ("&&").toList = ['&', '&'] := by decide
+@[simp] private theorem toList_lor_op : ("||").toList = ['|', '|'] := by decide
+@[simp] private theorem toList_band_op : ("&").toList = ['&'] := by decide
+@[simp] private theorem toList_bor_op : ("|").toList = ['|'] := by decide
+@[simp] private theorem toList_bxor_op : ("^").toList = ['^'] := by decide
+@[simp] private theorem toList_bshl_op : ("<<").toList = ['<', '<'] := by decide
+@[simp] private theorem toList_bshr_op : (">>").toList = ['>', '>'] := by decide
 
 /-- pBinOpR roundtrip: when rest starts with a non-whitespace char,
     pBinOpR correctly parses "op " ++ rest as (op, rest). -/
@@ -732,7 +732,7 @@ private theorem power_match_impossible_varref (name : String)
     | inr h =>
       obtain ⟨c', _, hc', hna, _, _⟩ := h
       have := (List.cons.inj hc').1; subst this
-      exact absurd (show ('w' : Char).isAlpha = true from by native_decide) (by rw [hna]; decide)
+      exact absurd (show ('w' : Char).isAlpha = true from by decide) (by rw [hna]; decide)
   | [a, b] =>
     rw [hcs] at heq; simp [List.append_assoc] at heq
     rw [heq.2.2] at hrest
@@ -741,7 +741,7 @@ private theorem power_match_impossible_varref (name : String)
     | inr h =>
       obtain ⟨c', _, hc', hna, _, _⟩ := h
       have := (List.cons.inj hc').1; subst this
-      exact absurd (show ('e' : Char).isAlpha = true from by native_decide) (by rw [hna]; decide)
+      exact absurd (show ('e' : Char).isAlpha = true from by decide) (by rw [hna]; decide)
   | [a, b, c] =>
     rw [hcs] at heq; simp [List.append_assoc] at heq
     rw [heq.2.2.2] at hrest
@@ -750,7 +750,7 @@ private theorem power_match_impossible_varref (name : String)
     | inr h =>
       obtain ⟨c', _, hc', hna, _, _⟩ := h
       have := (List.cons.inj hc').1; subst this
-      exact absurd (show ('r' : Char).isAlpha = true from by native_decide) (by rw [hna]; decide)
+      exact absurd (show ('r' : Char).isAlpha = true from by decide) (by rw [hna]; decide)
   | [a, b, c, d] =>
     rw [hcs] at heq; simp [List.append_assoc] at heq
     -- rest = '(' :: tail, but ExprSafeR says skipWsR rest ≠ '(' :: _
@@ -763,8 +763,8 @@ private theorem power_match_impossible_varref (name : String)
     have hmem : '(' ∈ name.toList := by rw [hcs]; simp
     have := hcont '(' hmem
     rcases this with h | h | h
-    · exact absurd h (by native_decide)
-    · exact absurd h (by native_decide)
+    · exact absurd h (by decide)
+    · exact absurd h (by decide)
     · exact absurd h (by decide)
 
 /-! ## Helper: skipWsR on space prefix -/
@@ -856,8 +856,8 @@ private theorem exprSafeR_binop_mid (op : MicroCBinOp)
     (rhs_print : List Char) (rest : List Char) :
     ExprSafeR (' ' :: (microRustBinOpToString op).toList ++
       (' ' :: rhs_print ++ (')' :: rest))) := by
-  refine ⟨Or.inr ⟨' ', _, rfl, by native_decide⟩,
-          Or.inr ⟨' ', _, rfl, by native_decide, by native_decide, by decide⟩, ?_, ?_⟩ <;>
+  refine ⟨Or.inr ⟨' ', _, rfl, by decide⟩,
+          Or.inr ⟨' ', _, rfl, by decide, by decide, by decide⟩, ?_, ?_⟩ <;>
   · intro cs; cases op <;> simp [microRustBinOpToString, skipWsR]
 
 /-- skipWsR on natToChars: digits are non-ws so skipWsR is identity. -/
@@ -901,7 +901,7 @@ theorem rustExpr_roundtrip_with_rest (e : MicroCExpr) (he : WFExprRust e)
         rw [pRustParenF_neg_digit k c (cs ++ ')' :: rest) hcd]
         rw [show c :: (cs ++ ')' :: rest) = (c :: cs) ++ ')' :: rest from by simp [List.cons_append]]
         rw [← hcs]
-        rw [pNatR_natToChars n.natAbs (')' :: rest) (Or.inr ⟨')', rest, rfl, by native_decide⟩)]
+        rw [pNatR_natToChars n.natAbs (')' :: rest) (Or.inr ⟨')', rest, rfl, by decide⟩)]
         simp only []
         rw [skipWsR_nonws ')' rest ⟨by decide, by decide, by decide, by decide⟩]
         congr 1; congr 1
@@ -927,13 +927,13 @@ theorem rustExpr_roundtrip_with_rest (e : MicroCExpr) (he : WFExprRust e)
     obtain ⟨k, rfl⟩ := Nat.exists_eq_succ_of_ne_zero hfne
     cases b with
     | true =>
-      have htl : ("true" : String).toList = ['t', 'r', 'u', 'e'] := by native_decide
+      have htl : ("true" : String).toList = ['t', 'r', 'u', 'e'] := by decide
       simp only [microRustExprToString_litBool_true, htl, List.cons_append, List.nil_append]
       have hnp : ∀ tail, 't' :: ('r' :: 'u' :: 'e' :: rest) ≠
           'p' :: 'o' :: 'w' :: 'e' :: 'r' :: '(' :: tail := by
         intro tail h; exact absurd (List.cons.inj h).1 (by decide)
       rw [pRustExprF_ident k 't' ('r' :: 'u' :: 'e' :: rest)
-        (by native_decide) (Or.inl (by native_decide)) hnp]
+        (by decide) (Or.inl (by decide)) hnp]
       simp only [pRustExprF.pRustIdentF]
       rw [show ('t' :: 'r' :: 'u' :: 'e' :: rest) = "true".toList ++ rest from by
           simp [htl, List.cons_append, List.nil_append]]
@@ -942,13 +942,13 @@ theorem rustExpr_roundtrip_with_rest (e : MicroCExpr) (he : WFExprRust e)
           hrest.2.1]
       simp
     | false =>
-      have hfl : ("false" : String).toList = ['f', 'a', 'l', 's', 'e'] := by native_decide
+      have hfl : ("false" : String).toList = ['f', 'a', 'l', 's', 'e'] := by decide
       simp only [microRustExprToString_litBool_false, hfl, List.cons_append, List.nil_append]
       have hnp : ∀ tail, 'f' :: ('a' :: 'l' :: 's' :: 'e' :: rest) ≠
           'p' :: 'o' :: 'w' :: 'e' :: 'r' :: '(' :: tail := by
         intro tail h; exact absurd (List.cons.inj h).1 (by decide)
       rw [pRustExprF_ident k 'f' ('a' :: 'l' :: 's' :: 'e' :: rest)
-        (by native_decide) (Or.inl (by native_decide)) hnp]
+        (by decide) (Or.inl (by decide)) hnp]
       simp only [pRustExprF.pRustIdentF]
       rw [show ('f' :: 'a' :: 'l' :: 's' :: 'e' :: rest) = "false".toList ++ rest from by
           simp [hfl, List.cons_append, List.nil_append]]
@@ -970,7 +970,7 @@ theorem rustExpr_roundtrip_with_rest (e : MicroCExpr) (he : WFExprRust e)
       have hcnd : c.isDigit = false := by
         cases hstart' with
         | inl h => exact isAlpha_not_digit c h
-        | inr h => subst h; native_decide
+        | inr h => subst h; decide
       -- power( match impossible
       have hnp : ∀ tail, c :: (cs ++ rest) ≠
           'p' :: 'o' :: 'w' :: 'e' :: 'r' :: '(' :: tail := by
@@ -990,7 +990,7 @@ theorem rustExpr_roundtrip_with_rest (e : MicroCExpr) (he : WFExprRust e)
           | inr h =>
             obtain ⟨c', _, hc', hna, _, _⟩ := h
             have := (List.cons.inj hc').1; subst this
-            exact absurd (show ('o' : Char).isAlpha = true from by native_decide) (by rw [hna]; decide)
+            exact absurd (show ('o' : Char).isAlpha = true from by decide) (by rw [hna]; decide)
         | [_], htl =>
           simp at htl; rw [htl.2] at hrest
           cases hrest.2.1 with
@@ -998,7 +998,7 @@ theorem rustExpr_roundtrip_with_rest (e : MicroCExpr) (he : WFExprRust e)
           | inr h =>
             obtain ⟨c', _, hc', hna, _, _⟩ := h
             have := (List.cons.inj hc').1; subst this
-            exact absurd (show ('w' : Char).isAlpha = true from by native_decide) (by rw [hna]; decide)
+            exact absurd (show ('w' : Char).isAlpha = true from by decide) (by rw [hna]; decide)
         | [_, _], htl =>
           simp at htl; rw [htl.2.2] at hrest
           cases hrest.2.1 with
@@ -1006,7 +1006,7 @@ theorem rustExpr_roundtrip_with_rest (e : MicroCExpr) (he : WFExprRust e)
           | inr h =>
             obtain ⟨c', _, hc', hna, _, _⟩ := h
             have := (List.cons.inj hc').1; subst this
-            exact absurd (show ('e' : Char).isAlpha = true from by native_decide) (by rw [hna]; decide)
+            exact absurd (show ('e' : Char).isAlpha = true from by decide) (by rw [hna]; decide)
         | [_, _, _], htl =>
           simp at htl; rw [htl.2.2.2] at hrest
           cases hrest.2.1 with
@@ -1014,7 +1014,7 @@ theorem rustExpr_roundtrip_with_rest (e : MicroCExpr) (he : WFExprRust e)
           | inr h =>
             obtain ⟨c', _, hc', hna, _, _⟩ := h
             have := (List.cons.inj hc').1; subst this
-            exact absurd (show ('r' : Char).isAlpha = true from by native_decide) (by rw [hna]; decide)
+            exact absurd (show ('r' : Char).isAlpha = true from by decide) (by rw [hna]; decide)
         | [_, _, _, _], htl =>
           simp at htl; rw [htl.2.2.2.2] at hrest
           have := hrest.2.2.2 tail
@@ -1025,8 +1025,8 @@ theorem rustExpr_roundtrip_with_rest (e : MicroCExpr) (he : WFExprRust e)
           have hmem : '(' ∈ a :: b :: c' :: d :: '(' :: cs5 := by simp
           exact absurd (hident '(' hmem) (by
             intro h; rcases h with h | h | h
-            · exact absurd h (by native_decide)
-            · exact absurd h (by native_decide)
+            · exact absurd h (by decide)
+            · exact absurd h (by decide)
             · exact absurd h (by decide))
       show pRustExprF (k + 1) (c :: (cs ++ rest)) = some (MicroCExpr.varRef name, rest)
       rw [pRustExprF_ident k c (cs ++ rest) hcnd (by cases hstart' with
@@ -1169,7 +1169,7 @@ theorem rustExpr_roundtrip_with_rest (e : MicroCExpr) (he : WFExprRust e)
             | litBool b =>
               cases b <;> simp [microRustExprToString] at h_head_e <;>
                 obtain ⟨rfl, _⟩ := h_head_e <;> simp [Char.isDigit] at hd <;>
-                exact absurd hd (by native_decide)
+                exact absurd hd (by decide)
             | varRef name hne_v hstart_v _ _ =>
               simp [microRustExprToString_varRef] at h_head_e
               have hne_v' := toList_ne_nil_of_ne_empty_r name hne_v
@@ -1192,7 +1192,7 @@ theorem rustExpr_roundtrip_with_rest (e : MicroCExpr) (he : WFExprRust e)
                   microRustExprToString_unaryOp_trunc] at h_head_e
                 simp only [String.toList_append] at h_head_e
                 obtain ⟨rfl, _⟩ := h_head_e
-                exact absurd hd (by native_decide))
+                exact absurd hd (by decide))
             | powCall _ _ _ =>
               simp [microRustExprToString_powCall, String.toList_append] at h_head_e
               obtain ⟨rfl, _⟩ := h_head_e; simp [Char.isDigit] at hd
@@ -1234,8 +1234,8 @@ theorem rustExpr_roundtrip_with_rest (e : MicroCExpr) (he : WFExprRust e)
         rw [pRustParenF_fallthrough k c_e _ h_not_bang_e h_not_neg_e]
         -- Apply IH for e with ExprSafeR for " as i64)" ++ rest
         have h_safe : ExprSafeR (' ' :: 'a' :: 's' :: ' ' :: 'i' :: '6' :: '4' :: ')' :: rest) :=
-          ⟨Or.inr ⟨' ', _, rfl, by native_decide⟩,
-           Or.inr ⟨' ', _, rfl, by native_decide, by native_decide, by decide⟩,
+          ⟨Or.inr ⟨' ', _, rfl, by decide⟩,
+           Or.inr ⟨' ', _, rfl, by decide, by decide, by decide⟩,
            by intro cs h; simp [skipWsR] at h,
            by intro cs h; simp [skipWsR] at h⟩
         simp only [← List.cons_append, ← h_head_e]
@@ -1258,8 +1258,8 @@ theorem rustExpr_roundtrip_with_rest (e : MicroCExpr) (he : WFExprRust e)
         rw [skipWsR_nonws c_e _ h_nonws_e]
         rw [pRustParenF_fallthrough k c_e _ h_not_bang_e h_not_neg_e]
         have h_safe : ExprSafeR (' ' :: 'a' :: 's' :: ' ' :: 'i' :: '3' :: '2' :: ')' :: rest) :=
-          ⟨Or.inr ⟨' ', _, rfl, by native_decide⟩,
-           Or.inr ⟨' ', _, rfl, by native_decide, by native_decide, by decide⟩,
+          ⟨Or.inr ⟨' ', _, rfl, by decide⟩,
+           Or.inr ⟨' ', _, rfl, by decide, by decide, by decide⟩,
            by intro cs h; simp [skipWsR] at h,
            by intro cs h; simp [skipWsR] at h⟩
         simp only [← List.cons_append, ← h_head_e]
@@ -1298,7 +1298,7 @@ theorem rustExpr_roundtrip_with_rest (e : MicroCExpr) (he : WFExprRust e)
       simp [skipWsR]
       -- pNatR on natToChars n
       rw [skipWsR_natToChars n (')' :: rest)]
-      rw [pNatR_natToChars n (')' :: rest) (Or.inr ⟨')', rest, rfl, by native_decide⟩)]
+      rw [pNatR_natToChars n (')' :: rest) (Or.inr ⟨')', rest, rfl, by decide⟩)]
       simp [skipWsR]
   | arrayAccess base idx h_base h_idx hbase_var ih_base ih_idx =>
     -- Extract vname; base must be a varRef
@@ -1326,7 +1326,7 @@ theorem rustExpr_roundtrip_with_rest (e : MicroCExpr) (he : WFExprRust e)
       have hcnd : c.isDigit = false := by
         cases hstart' with
         | inl h => exact isAlpha_not_digit c h
-        | inr h => subst h; native_decide
+        | inr h => subst h; decide
       -- power( match impossible
       have hnp : ∀ tail, c :: (cs ++ ('[' :: ((microRustExprToString idx).toList ++
           (' ' :: 'a' :: 's' :: ' ' :: 'u' :: 's' :: 'i' :: 'z' :: 'e' :: ']' :: rest)))) ≠
@@ -1356,8 +1356,8 @@ theorem rustExpr_roundtrip_with_rest (e : MicroCExpr) (he : WFExprRust e)
           have hmem : '(' ∈ a :: b :: c' :: d :: '(' :: cs5 := by simp
           exact absurd (hident '(' hmem) (by
             intro h; rcases h with h | h | h
-            · exact absurd h (by native_decide)
-            · exact absurd h (by native_decide)
+            · exact absurd h (by decide)
+            · exact absurd h (by decide)
             · exact absurd h (by decide))
       show pRustExprF (k + 1) (c :: (cs ++ ('[' :: ((microRustExprToString idx).toList ++
           (' ' :: 'a' :: 's' :: ' ' :: 'u' :: 's' :: 'i' :: 'z' :: 'e' :: ']' :: rest))))) =
@@ -1369,7 +1369,7 @@ theorem rustExpr_roundtrip_with_rest (e : MicroCExpr) (he : WFExprRust e)
       -- pIdentR parses vname, leaving '[' :: print(idx) ++ " as usize]" :: rest
       have h_nli : NoLeadingIdentR ('[' :: ((microRustExprToString idx).toList ++
           (' ' :: 'a' :: 's' :: ' ' :: 'u' :: 's' :: 'i' :: 'z' :: 'e' :: ']' :: rest))) :=
-        Or.inr ⟨'[', _, rfl, by native_decide, by native_decide, by decide⟩
+        Or.inr ⟨'[', _, rfl, by decide, by decide, by decide⟩
       have hpid : pIdentR (c :: (cs ++ ('[' :: ((microRustExprToString idx).toList ++
           (' ' :: 'a' :: 's' :: ' ' :: 'u' :: 's' :: 'i' :: 'z' :: 'e' :: ']' :: rest))))) =
           some (vname, '[' :: ((microRustExprToString idx).toList ++
@@ -1396,8 +1396,8 @@ theorem rustExpr_roundtrip_with_rest (e : MicroCExpr) (he : WFExprRust e)
         -- Need ExprSafeR for " as usize]" ++ rest
         have h_safe_as : ExprSafeR
             (' ' :: 'a' :: 's' :: ' ' :: 'u' :: 's' :: 'i' :: 'z' :: 'e' :: ']' :: rest) :=
-          ⟨Or.inr ⟨' ', _, rfl, by native_decide⟩,
-           Or.inr ⟨' ', _, rfl, by native_decide, by native_decide, by decide⟩,
+          ⟨Or.inr ⟨' ', _, rfl, by decide⟩,
+           Or.inr ⟨' ', _, rfl, by decide, by decide, by decide⟩,
            by intro cs h; simp [skipWsR] at h,
            by intro cs h; simp [skipWsR] at h⟩
         have h_eq_idx : pRustExprF k (c_i :: (cs_i ++

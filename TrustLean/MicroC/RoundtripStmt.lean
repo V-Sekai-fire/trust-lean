@@ -97,7 +97,7 @@ theorem totalFuel_ge_stmtDepth (s : MicroCStmt) : totalFuel s ≥ stmtDepth s :=
 /-! ## ExprSafe for statement delimiters -/
 
 theorem exprSafe_semicolon (rest : List Char) : ExprSafe (';' :: rest) :=
-  exprSafe_sep ';' rest (by native_decide) (by native_decide) (by decide)
+  exprSafe_sep ';' rest (by decide) (by decide) (by decide)
     (by decide) (by decide) ⟨by decide, by decide, by decide, by decide⟩
 
 /-! ## skipWs helpers -/

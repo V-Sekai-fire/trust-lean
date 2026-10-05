@@ -288,22 +288,22 @@ private theorem alpha_or_us_not_ws (c : Char) (h : c.isAlpha = true ∨ c = '_')
 /-- NoLeadingIdentR for space. -/
 private theorem noLeadingIdentR_space (rest : List Char) :
     NoLeadingIdentR (' ' :: rest) :=
-  Or.inr ⟨' ', rest, rfl, by native_decide, by native_decide, by decide⟩
+  Or.inr ⟨' ', rest, rfl, by decide, by decide, by decide⟩
 
 /-- NoLeadingIdentR for semicolon. -/
 private theorem noLeadingIdentR_semicolon (rest : List Char) :
     NoLeadingIdentR (';' :: rest) :=
-  Or.inr ⟨';', rest, rfl, by native_decide, by native_decide, by decide⟩
+  Or.inr ⟨';', rest, rfl, by decide, by decide, by decide⟩
 
 /-- NoLeadingIdentR for open bracket. -/
 private theorem noLeadingIdentR_bracket (rest : List Char) :
     NoLeadingIdentR ('[' :: rest) :=
-  Or.inr ⟨'[', rest, rfl, by native_decide, by native_decide, by decide⟩
+  Or.inr ⟨'[', rest, rfl, by decide, by decide, by decide⟩
 
 /-- NoLeadingIdentR for open paren. -/
 private theorem noLeadingIdentR_lparen (rest : List Char) :
     NoLeadingIdentR ('(' :: rest) :=
-  Or.inr ⟨'(', rest, rfl, by native_decide, by native_decide, by decide⟩
+  Or.inr ⟨'(', rest, rfl, by decide, by decide, by decide⟩
 
 /-- skipWsR is identity when input starts with a valid identifier. -/
 private theorem skipWsR_ident_start (name : String) (rest : List Char)
@@ -380,8 +380,8 @@ private theorem exprSafeR_space_safe (c : Char) (rest : List Char)
     (hna : c.isAlpha = false) (hnd : c.isDigit = false) (hnu : c ≠ '_')
     (hnws : c ≠ ' ' ∧ c ≠ '\n' ∧ c ≠ '\t' ∧ c ≠ '\r') :
     ExprSafeR (' ' :: c :: rest) := by
-  refine ⟨Or.inr ⟨' ', c :: rest, rfl, by native_decide⟩,
-          Or.inr ⟨' ', c :: rest, rfl, by native_decide, by native_decide, by decide⟩, ?_, ?_⟩
+  refine ⟨Or.inr ⟨' ', c :: rest, rfl, by decide⟩,
+          Or.inr ⟨' ', c :: rest, rfl, by decide, by decide, by decide⟩, ?_, ?_⟩
   · intro cs
     show skipWsR (c :: rest) ≠ '[' :: cs
     rw [skipWsR_nonws c _ hnws]; intro h; exact hnb (List.cons.inj h).1
@@ -1164,8 +1164,8 @@ private theorem roundtrip_combined_rust (s : MicroCStmt) (hs : WFStmtRust s)
         have h_safe_as : ExprSafeR
             (' ' :: 'a' :: 's' :: ' ' :: 'u' :: 's' :: 'i' :: 'z' :: 'e' :: ']' :: ' ' :: '=' :: ' ' ::
               ((microRustExprToString val).toList ++ (';' :: rest'))) :=
-          ⟨Or.inr ⟨' ', _, rfl, by native_decide⟩,
-           Or.inr ⟨' ', _, rfl, by native_decide, by native_decide, by decide⟩,
+          ⟨Or.inr ⟨' ', _, rfl, by decide⟩,
+           Or.inr ⟨' ', _, rfl, by decide, by decide, by decide⟩,
            by intro cs h; simp [skipWsR] at h,
            by intro cs h; simp [skipWsR] at h⟩
         have h_eq_i : c_i :: (cs_i ++ (' ' :: 'a' :: 's' :: ' ' :: 'u' :: 's' :: 'i' :: 'z' :: 'e' :: ']' :: ' ' :: '=' :: ' ' ::
@@ -1246,8 +1246,8 @@ private theorem roundtrip_combined_rust (s : MicroCStmt) (hs : WFStmtRust s)
         simp only [List.cons_append, skipWsR_nonws c_i _ h_nonws_i]
         have h_safe_as : ExprSafeR
             (' ' :: 'a' :: 's' :: ' ' :: 'u' :: 's' :: 'i' :: 'z' :: 'e' :: ']' :: ';' :: rest') :=
-          ⟨Or.inr ⟨' ', _, rfl, by native_decide⟩,
-           Or.inr ⟨' ', _, rfl, by native_decide, by native_decide, by decide⟩,
+          ⟨Or.inr ⟨' ', _, rfl, by decide⟩,
+           Or.inr ⟨' ', _, rfl, by decide, by decide, by decide⟩,
            by intro cs h; simp [skipWsR] at h,
            by intro cs h; simp [skipWsR] at h⟩
         have h_eq_i : c_i :: (cs_i ++ (' ' :: 'a' :: 's' :: ' ' :: 'u' :: 's' :: 'i' :: 'z' :: 'e' :: ']' :: ';' :: rest')) =
@@ -1397,7 +1397,7 @@ private theorem roundtrip_combined_rust (s : MicroCStmt) (hs : WFStmtRust s)
           ' ' :: '}' :: ' ' :: 'e' :: 'l' :: 's' :: 'e' :: ' ' :: '{' :: ' ' ::
           ((microRustToString elseB).toList ++ ' ' :: '}' :: rest'))) :=
         exprSafeR_space_safe '{' _ (by decide) (by decide)
-          (by native_decide) (by native_decide) (by decide)
+          (by decide) (by decide) (by decide)
           ⟨by decide, by decide, by decide, by decide⟩
       match h_hd : (microRustExprToString cond).toList with
       | [] => exact absurd h_hd h_ne
@@ -1465,7 +1465,7 @@ private theorem roundtrip_combined_rust (s : MicroCStmt) (hs : WFStmtRust s)
         have h_rest_safe : ExprSafeR (' ' :: '{' :: ' ' ::
             ((microRustToString body).toList ++ ' ' :: '}' :: rest')) :=
           exprSafeR_space_safe '{' _ (by decide) (by decide)
-            (by native_decide) (by native_decide) (by decide)
+            (by decide) (by decide) (by decide)
             ⟨by decide, by decide, by decide, by decide⟩
         have h_eq : cc :: (ccs ++ (' ' :: '{' :: ' ' ::
             ((microRustToString body).toList ++ ' ' :: '}' :: rest'))) =
