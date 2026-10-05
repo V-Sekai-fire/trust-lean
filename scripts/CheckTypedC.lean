@@ -381,7 +381,7 @@ def emittedPrograms : List (String × String) :=
    ("check", Pipeline.emit (BoolExpr.or_ (.and_ (.var 0) (.var 1)) (.not_ (.var 0)))
       (default : CConfig) "check" [("b0", "bool"), ("b1", "bool")]),
    ("check with int64_t parameters", Pipeline.emit (BoolExpr.or_ (.and_ (.var 0) (.var 1)) (.not_ (.var 0)))
-      (default : CConfig) "check" [("a", "int64_t"), ("b", "int64_t")]),
+      (default : CConfig) "check" [("b0", "int64_t"), ("b1", "int64_t")]),
    ("constant", Pipeline.emit (ArithExpr.lit 42) (default : CConfig) "constant" []),
    ("deep", Pipeline.emit deepArith (default : CConfig) "deep" [("x", "int64_t")]),
    ("long long", Pipeline.emit (ArithExpr.lit 42) ({ useInt64 := false } : CConfig) "test_ll"

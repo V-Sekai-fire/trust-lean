@@ -149,9 +149,11 @@ def cCode := generateCFunction { includePowerHelper := false } "compute"
 ```
 
 The body and the return print through `microCToString`, which `master_roundtrip` covers, after
-`printTyped`'s declarations. A typed program (`MicroC/Typed.lean`) declares `uint32_t`,
-`int64_t` and `bool` variables; `master_typed_roundtrip` parses its printed form back, and
-`evalTyped` is its semantics, equal to `evalMicroC_uint32` on the `uint32_t` subset.
+`printTyped`'s declarations. Each variable the body writes, other than a parameter, is declared
+with the type all its writes share, or `int64_t` when they differ; a variable the body only reads
+must be a parameter. A typed program (`MicroC/Typed.lean`) declares `uint32_t`, `int64_t` and
+`bool` variables; `master_typed_roundtrip` parses its printed form back, and `evalTyped` is its
+semantics, equal to `evalMicroC_uint32` on the `uint32_t` subset.
 
 ## Performance
 
