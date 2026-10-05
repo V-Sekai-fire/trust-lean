@@ -179,18 +179,18 @@ def NoLeadingIdent (cs : List Char) : Prop :=
 theorem char_ofNat_toNat_digit (d : Nat) (hd : d < 10) :
     (Char.ofNat (d + 48)).toNat = d + 48 := by
   match d, hd with
-  | 0, _ => native_decide | 1, _ => native_decide | 2, _ => native_decide
-  | 3, _ => native_decide | 4, _ => native_decide | 5, _ => native_decide
-  | 6, _ => native_decide | 7, _ => native_decide | 8, _ => native_decide
-  | 9, _ => native_decide | d + 10, h => omega
+  | 0, _ => decide | 1, _ => decide | 2, _ => decide
+  | 3, _ => decide | 4, _ => decide | 5, _ => decide
+  | 6, _ => decide | 7, _ => decide | 8, _ => decide
+  | 9, _ => decide | d + 10, h => omega
 
 theorem char_ofNat_isDigit (d : Nat) (hd : d < 10) :
     (Char.ofNat (d + 48)).isDigit = true := by
   match d, hd with
-  | 0, _ => native_decide | 1, _ => native_decide | 2, _ => native_decide
-  | 3, _ => native_decide | 4, _ => native_decide | 5, _ => native_decide
-  | 6, _ => native_decide | 7, _ => native_decide | 8, _ => native_decide
-  | 9, _ => native_decide | d + 10, h => omega
+  | 0, _ => decide | 1, _ => decide | 2, _ => decide
+  | 3, _ => decide | 4, _ => decide | 5, _ => decide
+  | 6, _ => decide | 7, _ => decide | 8, _ => decide
+  | 9, _ => decide | d + 10, h => omega
 
 /-! ### natToChars properties -/
 

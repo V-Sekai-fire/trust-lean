@@ -29,6 +29,21 @@ jobs:
       - name: Every TrustLean module is in the default import closure
         run: lean --run scripts/CheckClosure.lean
 
+  axioms-self-test:
+    name: axiom gate self-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install elan
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      - name: Planted native_decide, bv_decide, sorry and axiom theorems fail the gate
+        run: lean --run scripts/CheckAxioms.lean --self-test
+
   build:
     name: lake build
     runs-on: ubuntu-latest
@@ -51,6 +66,9 @@ jobs:
 
       - name: Build the default target
         run: lake build
+
+      - name: Gate theorems depend only on propext, Classical.choice, Quot.sound
+        run: lake env lean --run scripts/CheckAxioms.lean
 
       - name: Build Tests
         run: lake build Tests

@@ -68,15 +68,15 @@ theorem exprSafe_sep (c : Char) (rest : List Char)
     rw [List.cons.injEq] at h; exact absurd h.1 hnp
 
 theorem exprSafe_rparen (rest : List Char) : ExprSafe (')' :: rest) :=
-  exprSafe_sep ')' rest (by native_decide) (by native_decide) (by decide)
+  exprSafe_sep ')' rest (by decide) (by decide) (by decide)
     (by decide) (by decide) ⟨by decide, by decide, by decide, by decide⟩
 
 theorem exprSafe_rbracket (rest : List Char) : ExprSafe (']' :: rest) :=
-  exprSafe_sep ']' rest (by native_decide) (by native_decide) (by decide)
+  exprSafe_sep ']' rest (by decide) (by decide) (by decide)
     (by decide) (by decide) ⟨by decide, by decide, by decide, by decide⟩
 
 theorem exprSafe_comma (rest : List Char) : ExprSafe (',' :: rest) :=
-  exprSafe_sep ',' rest (by native_decide) (by native_decide) (by decide)
+  exprSafe_sep ',' rest (by decide) (by decide) (by decide)
     (by decide) (by decide) ⟨by decide, by decide, by decide, by decide⟩
 
 /-! ## Char property helpers -/
@@ -172,8 +172,8 @@ private theorem exprSafe_binop_mid (op : MicroCBinOp)
     (rhs_print : List Char) (rest : List Char) :
     ExprSafe (' ' :: (microCBinOpToString op).toList ++
       (' ' :: rhs_print ++ (')' :: rest))) := by
-  refine ⟨Or.inr ⟨' ', _, rfl, by native_decide⟩,
-          Or.inr ⟨' ', _, rfl, by native_decide, by native_decide, by decide⟩, ?_, ?_⟩
+  refine ⟨Or.inr ⟨' ', _, rfl, by decide⟩,
+          Or.inr ⟨' ', _, rfl, by decide, by decide, by decide⟩, ?_, ?_⟩
   · intro cs
     cases op <;> simp only [microCBinOpToString] <;> (
       first
@@ -361,16 +361,16 @@ private theorem power_paren_impossible (cs rest tail : List Char)
   match cs, heq with
   | [], heq =>
     simp at heq; rw [heq] at hni
-    exact noLeadingIdent_alpha_false 'o' _ (by native_decide) hni
+    exact noLeadingIdent_alpha_false 'o' _ (by decide) hni
   | [_], heq =>
     simp at heq; rw [heq.2] at hni
-    exact noLeadingIdent_alpha_false 'w' _ (by native_decide) hni
+    exact noLeadingIdent_alpha_false 'w' _ (by decide) hni
   | [_, _], heq =>
     simp at heq; rw [heq.2.2] at hni
-    exact noLeadingIdent_alpha_false 'e' _ (by native_decide) hni
+    exact noLeadingIdent_alpha_false 'e' _ (by decide) hni
   | [_, _, _], heq =>
     simp at heq; rw [heq.2.2.2] at hni
-    exact noLeadingIdent_alpha_false 'r' _ (by native_decide) hni
+    exact noLeadingIdent_alpha_false 'r' _ (by decide) hni
   | [_, _, _, _], heq =>
     simp at heq; rw [heq.2.2.2.2] at hnp
     exact absurd (skipWs_nonws '(' tail ⟨by decide, by decide, by decide, by decide⟩) (hnp tail)
@@ -381,8 +381,8 @@ private theorem power_paren_impossible (cs rest tail : List Char)
     have hmem : '(' ∈ a :: b :: c :: d :: '(' :: cs5 := by simp [List.mem_cons]
     have := hident '(' hmem
     rcases this with h | h | h
-    · exact absurd h (by native_decide)
-    · exact absurd h (by native_decide)
+    · exact absurd h (by decide)
+    · exact absurd h (by decide)
     · exact absurd h (by decide)
 
 /-! ## Helper: First char of printed WFExpr -/
@@ -675,7 +675,7 @@ theorem expr_roundtrip_with_rest (e : MicroCExpr) (he : WFExpr e) (hs : NegLitDi
         rw [pParenF_neg_digit k c (cs ++ ')' :: rest) hcd]
         rw [show c :: (cs ++ ')' :: rest) = (c :: cs) ++ ')' :: rest from by simp [List.cons_append]]
         rw [← hcs]
-        rw [pNat_natToChars n.natAbs (')' :: rest) (Or.inr ⟨')', rest, rfl, by native_decide⟩)]
+        rw [pNat_natToChars n.natAbs (')' :: rest) (Or.inr ⟨')', rest, rfl, by decide⟩)]
         simp only []
         rw [skipWs_nonws ')' rest ⟨by decide, by decide, by decide, by decide⟩]
         congr 1; congr 1
@@ -701,7 +701,7 @@ theorem expr_roundtrip_with_rest (e : MicroCExpr) (he : WFExpr e) (hs : NegLitDi
     obtain ⟨k, rfl⟩ := Nat.exists_eq_succ_of_ne_zero hfne
     cases b with
     | true =>
-      have htl : ("true" : String).toList = ['t', 'r', 'u', 'e'] := by native_decide
+      have htl : ("true" : String).toList = ['t', 'r', 'u', 'e'] := by decide
       simp only [microCExprToString_litBool_true, htl, List.cons_append, List.nil_append]
       -- Dispatch pExprF: 't' is not '(' or 'p', not digit, is alpha
       simp only [pExprF]
@@ -711,9 +711,9 @@ theorem expr_roundtrip_with_rest (e : MicroCExpr) (he : WFExpr e) (hs : NegLitDi
       · rename_i heq; exact absurd (List.cons.inj heq).1 (by decide)
       · rename_i c' tail _ _ heq
         have := (List.cons.inj heq).1; subst this
-        simp [show ('t' : Char).isDigit = false from by native_decide]
+        simp [show ('t' : Char).isDigit = false from by decide]
         simp only [pExprF.pIdentF]
-        have htrue : ("true" : String).toList = ['t', 'r', 'u', 'e'] := by native_decide
+        have htrue : ("true" : String).toList = ['t', 'r', 'u', 'e'] := by decide
         rw [show ('t' :: 'r' :: 'u' :: 'e' :: rest) = "true".toList ++ rest from by
             simp [htrue, List.cons_append, List.nil_append]]
         rw [pIdent_exact "true" rest (by decide) (by simp [htrue])
@@ -722,7 +722,7 @@ theorem expr_roundtrip_with_rest (e : MicroCExpr) (he : WFExpr e) (hs : NegLitDi
         simp
       · rename_i heq; exact absurd heq (by simp)
     | false =>
-      have hfl : ("false" : String).toList = ['f', 'a', 'l', 's', 'e'] := by native_decide
+      have hfl : ("false" : String).toList = ['f', 'a', 'l', 's', 'e'] := by decide
       simp only [microCExprToString_litBool_false, hfl, List.cons_append, List.nil_append]
       simp only [pExprF]
       rw [skipWs_nonws 'f' _ ⟨by decide, by decide, by decide, by decide⟩]
@@ -731,9 +731,9 @@ theorem expr_roundtrip_with_rest (e : MicroCExpr) (he : WFExpr e) (hs : NegLitDi
       · rename_i heq; exact absurd (List.cons.inj heq).1 (by decide)
       · rename_i c' tail _ _ heq
         have := (List.cons.inj heq).1; subst this
-        simp [show ('f' : Char).isDigit = false from by native_decide]
+        simp [show ('f' : Char).isDigit = false from by decide]
         simp only [pExprF.pIdentF]
-        have hfalse : ("false" : String).toList = ['f', 'a', 'l', 's', 'e'] := by native_decide
+        have hfalse : ("false" : String).toList = ['f', 'a', 'l', 's', 'e'] := by decide
         rw [show ('f' :: 'a' :: 'l' :: 's' :: 'e' :: rest) = "false".toList ++ rest from by
             simp [hfalse, List.cons_append, List.nil_append]]
         rw [pIdent_exact "false" rest (by decide) (by simp [hfalse])
@@ -759,7 +759,7 @@ theorem expr_roundtrip_with_rest (e : MicroCExpr) (he : WFExpr e) (hs : NegLitDi
       have hcnd : c.isDigit = false := by
         cases hstart' with
         | inl h => exact isAlpha_not_isDigit c h
-        | inr h => subst h; native_decide
+        | inr h => subst h; decide
       have hcid : (c.isAlpha || c == '_') = true := by
         cases hstart' with
         | inl h => simp [h]
@@ -984,7 +984,7 @@ theorem expr_roundtrip_with_rest (e : MicroCExpr) (he : WFExpr e) (hs : NegLitDi
             | litBool b =>
               cases b <;> simp [microCExprToString] at h_head_e <;>
                 obtain ⟨rfl, _⟩ := h_head_e <;> simp [Char.isDigit] at hd <;>
-                exact absurd hd (by native_decide)
+                exact absurd hd (by decide)
             | varRef name hne hstart _ _ =>
               simp [microCExprToString_varRef] at h_head_e
               have hne' := toList_ne_nil_of_ne_empty name hne
@@ -1061,7 +1061,7 @@ theorem expr_roundtrip_with_rest (e : MicroCExpr) (he : WFExpr e) (hs : NegLitDi
       simp [skipWs]
       -- pNat on natToChars n
       rw [skipWs_natToChars n (')' :: rest)]
-      rw [pNat_natToChars n (')' :: rest) (Or.inr ⟨')', rest, rfl, by native_decide⟩)]
+      rw [pNat_natToChars n (')' :: rest) (Or.inr ⟨')', rest, rfl, by decide⟩)]
       simp [skipWs]
   | arrayAccess base idx h_base h_idx hbase_var ih_base ih_idx =>
     -- Extract vname; base must be a varRef
@@ -1094,7 +1094,7 @@ theorem expr_roundtrip_with_rest (e : MicroCExpr) (he : WFExpr e) (hs : NegLitDi
       have hcnd : c.isDigit = false := by
         cases hstart' with
         | inl h => exact isAlpha_not_isDigit c h
-        | inr h => subst h; native_decide
+        | inr h => subst h; decide
       have hcid : (c.isAlpha || c == '_') = true := by
         cases hstart' with
         | inl h => simp [h]
@@ -1115,7 +1115,7 @@ theorem expr_roundtrip_with_rest (e : MicroCExpr) (he : WFExpr e) (hs : NegLitDi
         have hident : ∀ ch ∈ cs, ch.isAlpha = true ∨ ch.isDigit = true ∨ ch = '_' := by
           intro ch hmem; exact hcont ch (by rw [hcs]; exact List.mem_cons_of_mem c hmem)
         have h_nli : NoLeadingIdent ('[' :: ((microCExprToString idx).toList ++ (']' :: rest))) :=
-          Or.inr ⟨'[', _, rfl, by native_decide, by native_decide, by decide⟩
+          Or.inr ⟨'[', _, rfl, by decide, by decide, by decide⟩
         have h_npa : ∀ xs, skipWs ('[' :: ((microCExprToString idx).toList ++ (']' :: rest))) ≠ '(' :: xs := by
           intro xs h; rw [skipWs_nonws '[' _ ⟨by decide, by decide, by decide, by decide⟩] at h
           exact absurd (List.cons.inj h).1 (by decide)
@@ -1127,7 +1127,7 @@ theorem expr_roundtrip_with_rest (e : MicroCExpr) (he : WFExpr e) (hs : NegLitDi
         simp only [pExprF.pIdentF]
         -- pIdent parses vname, leaving '[' :: print(idx) ++ ']' :: rest
         have h_nli : NoLeadingIdent ('[' :: ((microCExprToString idx).toList ++ (']' :: rest))) :=
-          Or.inr ⟨'[', _, rfl, by native_decide, by native_decide, by decide⟩
+          Or.inr ⟨'[', _, rfl, by decide, by decide, by decide⟩
         have hpid : pIdent (c :: (cs ++ ('[' :: ((microCExprToString idx).toList ++ (']' :: rest))))) =
             some (vname, '[' :: ((microCExprToString idx).toList ++ (']' :: rest))) := by
           have harg : c :: (cs ++ ('[' :: ((microCExprToString idx).toList ++ (']' :: rest)))) =
