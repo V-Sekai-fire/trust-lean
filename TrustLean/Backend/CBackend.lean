@@ -172,6 +172,14 @@ def MicroCStmt.assignedTy (Γ : CDecls) (x : String) : MicroCStmt → Option CTy
   | .while_ _ b => b.assignedTy Γ x
   | _ => none
 
+/-- Call names through `sanitizeIdentifier`, as `stmtToC` printed them. -/
+def MicroCStmt.sanitizeCalls : MicroCStmt → MicroCStmt
+  | .call r f args => .call r (sanitizeIdentifier f) args
+  | .seq s1 s2 => .seq s1.sanitizeCalls s2.sanitizeCalls
+  | .ite c t e => .ite c t.sanitizeCalls e.sanitizeCalls
+  | .while_ c b => .while_ c b.sanitizeCalls
+  | s => s
+
 /-- The type of a parameter, from the type name it is declared with. -/
 def paramCType (t : String) : Option CType :=
   if t = "long long" then some .i64 else CType.ofName t
@@ -197,7 +205,7 @@ def generateCFunction (cfg : CConfig) (funcName : String)
   let signature := cfg.intType ++ " " ++ safeName ++ "(" ++ buildParamList params ++ ")"
   let paramNames := params.map fun (n, _) => varNameToC (.user n)
   let paramDecls := params.filterMap fun (n, t) => (paramCType t).map (varNameToC (.user n), ·)
-  let ms := stmtToMicroC body
+  let ms := (stmtToMicroC body).sanitizeCalls
   let r := exprToMicroC result
   signature ++ " {\n" ++ (if cfg.includePowerHelper then "(void)power;\n" else "") ++
     printTyped (localDecls paramDecls paramNames ms r) ms ++ "\n" ++
@@ -230,7 +238,7 @@ def generateCHeader (cfg : CConfig) : String :=
 /-- C backend implements BackendEmitter through the printer the roundtrip theorems cover. -/
 instance : BackendEmitter CConfig where
   name := "C"
-  emitStmt _cfg level stmt := indentStr level ++ microCToString (stmtToMicroC stmt)
+  emitStmt _cfg level stmt := indentStr level ++ microCToString (stmtToMicroC stmt).sanitizeCalls
   emitFunction cfg name params body result := generateCFunction cfg name params body result
   emitHeader cfg := generateCHeader cfg
 
