@@ -9,7 +9,7 @@
 
 **Trust-Lean** is a verified code generation framework that compiles multiple DSL frontends through a shared Core IR to multiple backends (C, Rust) with **machine-checked correctness proofs**. Every compilation step carries a Lean proof that the output preserves the semantics of the input.
 
-The core value proposition: **define your DSL semantics in Lean 4, implement the `CodeGenerable` + `CodeGenSound` typeclasses, and get verified C or Rust code** — the framework handles compilation, backend emission, and proof obligations. Zero sorry, zero axioms — the kernel checks everything.
+The core value proposition: **define your DSL semantics in Lean 4, implement the `CodeGenerable` + `CodeGenSound` typeclasses, and get verified C or Rust code** — the framework handles compilation, backend emission, and proof obligations. Zero sorry. The gate theorems (every public `TrustLean` theorem named `*_correct`, `*_correct_*` or `master_*`, plus the roundtrip and pipeline theorems listed in `scripts/CheckAxioms.lean`) depend only on `propext`, `Classical.choice` and `Quot.sound`; other theorems and the oracle examples may use `native_decide`, which trusts the compiler.
 
 Trust-Lean currently supports three frontends (ArithExpr, BoolExpr, ImpStmt), two backends (C, Rust), a MicroC formal C99 subset with roundtrip parser, Int64/UInt32/UInt64 evaluators with agreement proofs, function call semantics, bitwise/casting operations, and Plonky3 field reduction bridges (Mersenne31, BabyBear, KoalaBear, Goldilocks).
 
@@ -82,6 +82,9 @@ lake build
 # Verify zero sorry
 grep -r "sorry" TrustLean/ --include="*.lean" | wc -l  # should be 0
 
+# Fail unless every gate theorem depends only on propext, Classical.choice, Quot.sound
+lake env lean --run scripts/CheckAxioms.lean
+
 # Run integration tests
 lake env lean TrustLean/Tests/Integration.lean
 ```
@@ -144,7 +147,7 @@ def cCode := generateCFunction defaultCConfig "compute"
 | Theorems + lemmas | 879 |
 | @[simp] lemmas | 430 |
 | Sorry | **0** |
-| Axioms | **0** |
+| Axioms of gate theorems | `propext`, `Classical.choice`, `Quot.sound` |
 | Source files | 73 |
 | Build | 632 jobs |
 
@@ -159,7 +162,6 @@ See [BENCHMARKS.md](BENCHMARKS.md) for full verification criteria and results. S
 | **Lines of Code** | 15,237 | **15,836** | +599 LOC |
 | **Theorems + lemmas** | 839 | **879** | +40 |
 | **Sorry** | 0 | **0** | Same |
-| **Axioms** | 0 | **0** | Same |
 | **Source files** | 71 | **73** | +2 |
 
 ### Key Achievements (v3.1.0 -> v3.2.0)
@@ -172,13 +174,13 @@ See [BENCHMARKS.md](BENCHMARKS.md) for full verification criteria and results. S
 ### Version History
 
 ```
-v1.0.0 (Feb 20)    0 axioms    0 sorry    Core IR + 3 frontends + 2 backends + pipeline
-v1.1.0 (Feb 21)    0 axioms    0 sorry    AMO-Lean bridge (ExpandedSigma -> Stmt)
-v1.2.0 (Feb 21)    0 axioms    0 sorry    Industrial CBackend + formal properties
-v2.0.0 (Mar 10)    0 axioms    0 sorry    MicroC: AST, evaluator, simulation, roundtrip
-v3.0.0 (Mar 12)    0 axioms    0 sorry    Int64 overflow, call semantics, full inductive roundtrip
-v3.1.0 (Mar 22)    0 axioms    0 sorry    Bitwise ops, unsigned MicroC, Plonky3 reductions
-v3.2.0 (Mar 27)    0 axioms    0 sorry    Verified Rust Backend (40 formal properties)
+v1.0.0 (Feb 20)    0 sorry    Core IR + 3 frontends + 2 backends + pipeline
+v1.1.0 (Feb 21)    0 sorry    AMO-Lean bridge (ExpandedSigma -> Stmt)
+v1.2.0 (Feb 21)    0 sorry    Industrial CBackend + formal properties
+v2.0.0 (Mar 10)    0 sorry    MicroC: AST, evaluator, simulation, roundtrip
+v3.0.0 (Mar 12)    0 sorry    Int64 overflow, call semantics, full inductive roundtrip
+v3.1.0 (Mar 22)    0 sorry    Bitwise ops, unsigned MicroC, Plonky3 reductions
+v3.2.0 (Mar 27)    0 sorry    Verified Rust Backend (40 formal properties)
 ```
 
 ## Future Work (v4.0+)
@@ -212,4 +214,4 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 ---
 
-**Trust-Lean v3.2.0** — Every compilation step is a theorem. 879 theorems, 0 sorry, 0 axioms.
+**Trust-Lean v3.2.0** — Every compilation step is a theorem. 879 theorems, 0 sorry; the gate theorems depend only on `propext`, `Classical.choice` and `Quot.sound`.
