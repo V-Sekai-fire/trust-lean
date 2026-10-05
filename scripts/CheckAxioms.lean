@@ -34,7 +34,12 @@ def required : Array Name := #[
   `TrustLean.evalStmt_eq_with, `TrustLean.evalMicroC_eq_with, `TrustLean.evalMicroC_uint32_eq_with,
   `TrustLean.evalMicroC_uint64_eq_with, `TrustLean.evalMicroC_int64_eq_with,
   `TrustLean.stmtToMicroC_uint32_wraps,
-  `TrustLean.master_func_roundtrip, `TrustLean.parseTyped_printTyped]
+  `TrustLean.master_func_roundtrip, `TrustLean.parseTyped_printTyped,
+  `TrustLean.evalMicroCB_uint32_eq_evalS32B, `TrustLean.evalFunc_u32_eq_evalFuncS32,
+  `TrustLean.evalFunc_u32_correct, `TrustLean.ringPush_wf, `TrustLean.ringPop_wf,
+  `TrustLean.ringMask_wf, `TrustLean.ringPush_roundtrip, `TrustLean.evalFunc_u32_ringPush_wrap,
+  `TrustLean.evalFunc_u32_ringPush_full, `TrustLean.evalFunc_u32_ringPush_outOfBounds,
+  `TrustLean.evalMicroC_uint32_ringPush_outOfBounds]
 
 def isGateName (n : Name) : Bool :=
   match n with
