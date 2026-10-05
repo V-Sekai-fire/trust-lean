@@ -37,12 +37,13 @@ def microCBinOpToString : MicroCBinOp → String
   | .bshl => "<<"
   | .bshr => ">>"
 
-/-- Convert MicroCUnaryOp to its C prefix operator string. -/
+/-- Convert MicroCUnaryOp to its C prefix operator string. Both casts compute `n % 2^32`,
+    as `evalUnaryOp` does: conversion to `uint32_t` reduces modulo 2^32 (C11 6.3.1.3p2). -/
 def microCUnaryOpToString : MicroCUnaryOp → String
   | .neg => "-"
   | .lnot => "!"
-  | .widen32to64 => "(int64_t)"
-  | .trunc64to32 => "(int32_t)"
+  | .widen32to64 => "(int64_t)(uint32_t)"
+  | .trunc64to32 => "(uint32_t)"
 
 /-! ## microCBinOpToString @[simp] Equation Lemmas -/
 
@@ -71,6 +72,13 @@ def natToChars (n : Nat) : List Char :=
   if h : n < 10 then [Char.ofNat (n + 48)]
   else natToChars (n / 10) ++ [Char.ofNat (n % 10 + 48)]
 termination_by n
+
+theorem natToChars_of_lt (n : Nat) (h : n < 10) : natToChars n = [Char.ofNat (n + 48)] := by
+  rw [natToChars]; simp [h]
+
+theorem natToChars_of_ge (n : Nat) (h : 10 ≤ n) :
+    natToChars n = natToChars (n / 10) ++ [Char.ofNat (n % 10 + 48)] := by
+  rw [natToChars]; simp [show ¬ n < 10 by omega]
 
 /-! ## Expression Pretty-Printer -/
 
@@ -128,6 +136,21 @@ def microCExprToString : MicroCExpr → String
 @[simp] theorem microCExprToString_arrayAccess (base idx : MicroCExpr) :
     microCExprToString (.arrayAccess base idx) =
       microCExprToString base ++ "[" ++ microCExprToString idx ++ "]" := rfl
+
+/-! ## Casts print as C11 conversions that compute `n % 2^32` -/
+
+/-- 3000000000 prints under `(uint32_t)`, which keeps it; `(int32_t)` would give -1294967296. -/
+theorem microCExprToString_trunc_3000000000 :
+    microCExprToString (.unaryOp .trunc64to32 (.litInt 3000000000)) = "((uint32_t)3000000000)" := by
+  simp (disch := decide) only [microCExprToString, natToChars_of_ge, natToChars_of_lt,
+    microCUnaryOpToString]
+  decide
+
+/-- -5 prints under `(int64_t)(uint32_t)`, which gives 4294967291; `(int64_t)` alone gives -5. -/
+theorem microCExprToString_widen_neg5 :
+    microCExprToString (.unaryOp .widen32to64 (.litInt (-5))) = "((int64_t)(uint32_t)(-5))" := by
+  simp (disch := decide) only [microCExprToString, natToChars_of_lt, microCUnaryOpToString]
+  decide
 
 /-! ## joinArgs: transparent join for proof support -/
 

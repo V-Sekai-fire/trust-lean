@@ -79,6 +79,7 @@ def pBinOp : ParseR MicroCBinOp := fun cs =>
 
 /-! ## Total Expression Parser -/
 
+set_option maxHeartbeats 400000 in
 /-- Total expression parser with fuel. Fuel decreases on each recursive
     pExprF call. At fuel 0, returns none. -/
 def pExprF : Nat → ParseR MicroCExpr
@@ -141,14 +142,15 @@ where
           | ')' :: final => some (.unaryOp .neg e, final)
           | _ => none
         | none => none
-    | '(' :: 'i' :: 'n' :: 't' :: '6' :: '4' :: '_' :: 't' :: ')' :: rest =>
+    | '(' :: 'i' :: 'n' :: 't' :: '6' :: '4' :: '_' :: 't' :: ')' ::
+      '(' :: 'u' :: 'i' :: 'n' :: 't' :: '3' :: '2' :: '_' :: 't' :: ')' :: rest =>
       match pExprF fuel rest with
       | some (e, rest') =>
         match skipWs rest' with
         | ')' :: final => some (.unaryOp .widen32to64 e, final)
         | _ => none
       | none => none
-    | '(' :: 'i' :: 'n' :: 't' :: '3' :: '2' :: '_' :: 't' :: ')' :: rest =>
+    | '(' :: 'u' :: 'i' :: 'n' :: 't' :: '3' :: '2' :: '_' :: 't' :: ')' :: rest =>
       match pExprF fuel rest with
       | some (e, rest') =>
         match skipWs rest' with

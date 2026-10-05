@@ -118,8 +118,8 @@ namespace TrustLean
 #eval do
   assert! unaryOpToRust .neg == "-"
   assert! unaryOpToRust .lnot == "!"
-  assert! unaryOpToRust .widen32to64 == " as i64"
-  assert! unaryOpToRust .trunc64to32 == " as i32"
+  assert! unaryOpToRust .widen32to64 == " as u32 as i64"
+  assert! unaryOpToRust .trunc64to32 == " as u32"
 
 /-! ## Header Generation -/
 

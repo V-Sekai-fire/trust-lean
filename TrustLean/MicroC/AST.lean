@@ -45,8 +45,8 @@ inductive MicroCBinOp where
 inductive MicroCUnaryOp where
   | neg          -- - (integer negation)
   | lnot         -- ! (boolean negation)
-  | widen32to64  -- (int64_t) cast (zero-extend)
-  | trunc64to32  -- (int32_t) cast (truncate)
+  | widen32to64  -- (int64_t)(uint32_t) cast (zero-extend the low 32 bits)
+  | trunc64to32  -- (uint32_t) cast (keep the low 32 bits)
   deriving Repr, BEq, DecidableEq, Inhabited
 
 /-! ## MicroC Expressions -/

@@ -47,12 +47,13 @@ def binOpToRust : BinOp → String
   | .bshr => ">>"
 
 /-- Convert a UnaryOp to the corresponding Rust operator string.
-    neg and lnot are prefix; widen/trunc are used as postfix by exprToRust. -/
+    neg and lnot are prefix; widen/trunc are used as postfix by exprToRust.
+    Both casts compute `n % 2^32`: `as u32` keeps the low 32 bits and `as i64` zero-extends. -/
 def unaryOpToRust : UnaryOp → String
   | .neg => "-"
   | .lnot => "!"
-  | .widen32to64 => " as i64"
-  | .trunc64to32 => " as i32"
+  | .widen32to64 => " as u32 as i64"
+  | .trunc64to32 => " as u32"
 
 /-! ## Expression Emission -/
 
@@ -66,8 +67,8 @@ def exprToRust : LowLevelExpr → String
   | .varRef v => varNameToStr v
   | .binOp op lhs rhs =>
     "(" ++ exprToRust lhs ++ " " ++ binOpToRust op ++ " " ++ exprToRust rhs ++ ")"
-  | .unaryOp .widen32to64 e => "(" ++ exprToRust e ++ " as i64)"
-  | .unaryOp .trunc64to32 e => "(" ++ exprToRust e ++ " as i32)"
+  | .unaryOp .widen32to64 e => "(" ++ exprToRust e ++ " as u32 as i64)"
+  | .unaryOp .trunc64to32 e => "(" ++ exprToRust e ++ " as u32)"
   | .unaryOp op e => "(" ++ unaryOpToRust op ++ exprToRust e ++ ")"
   | .powCall base n => "power(" ++ exprToRust base ++ ", " ++ toString n ++ ")"
   | .addrOf v => "&" ++ varNameToStr v

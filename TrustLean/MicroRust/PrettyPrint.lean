@@ -7,7 +7,7 @@
   - Array access: `base[idx as usize]` not `base[idx]`
   - Store: `base[idx as usize] = val;`
   - Load: `var = base[idx as usize];`
-  - Cast: `(e as i64)` / `(e as i32)` not `((int64_t)e)` / `((int32_t)e)`
+  - Cast: `(e as u32 as i64)` / `(e as u32)` not `((int64_t)(uint32_t)e)` / `((uint32_t)e)`
   - Booleans: `true`/`false` (same as MicroC)
 
   Fully parenthesized canonical form. No indentation (flat form for roundtrip proofs).
@@ -40,12 +40,13 @@ def microRustBinOpToString : MicroCBinOp → String
   | .bshr => ">>"
 
 /-- Convert MicroCUnaryOp to its Rust prefix operator string.
-    Casts use `as i64`/`as i32` postfix syntax (rendered inside parens by expr printer). -/
+    Casts use `as u32 as i64`/`as u32` postfix syntax (rendered inside parens by expr printer);
+    both compute `n % 2^32`. -/
 def microRustUnaryOpToString : MicroCUnaryOp → String
   | .neg => "-"
   | .lnot => "!"
-  | .widen32to64 => " as i64"
-  | .trunc64to32 => " as i32"
+  | .widen32to64 => " as u32 as i64"
+  | .trunc64to32 => " as u32"
 
 /-! ## microRustBinOpToString @[simp] Equation Lemmas -/
 
@@ -64,15 +65,17 @@ def microRustUnaryOpToString : MicroCUnaryOp → String
 
 @[simp] theorem microRustUnaryOpToString_neg : microRustUnaryOpToString .neg = "-" := rfl
 @[simp] theorem microRustUnaryOpToString_lnot : microRustUnaryOpToString .lnot = "!" := rfl
-@[simp] theorem microRustUnaryOpToString_widen : microRustUnaryOpToString .widen32to64 = " as i64" := rfl
-@[simp] theorem microRustUnaryOpToString_trunc : microRustUnaryOpToString .trunc64to32 = " as i32" := rfl
+@[simp] theorem microRustUnaryOpToString_widen :
+    microRustUnaryOpToString .widen32to64 = " as u32 as i64" := rfl
+@[simp] theorem microRustUnaryOpToString_trunc :
+    microRustUnaryOpToString .trunc64to32 = " as u32" := rfl
 
 /-! ## Expression Pretty-Printer (Rust syntax) -/
 
 /-- Convert a MicroCExpr to a canonical Rust expression string.
     Fully parenthesized binary expressions. Negative literals parenthesized.
     Booleans as "true"/"false". Array access uses `as usize`.
-    Casts use postfix `as i64`/`as i32` syntax.
+    Casts use postfix `as u32 as i64`/`as u32` syntax.
     Uses natToChars for provable roundtrip. -/
 def microRustExprToString : MicroCExpr → String
   | .litInt n =>
@@ -89,9 +92,9 @@ def microRustExprToString : MicroCExpr → String
   | .unaryOp .lnot e =>
     "(" ++ "!" ++ microRustExprToString e ++ ")"
   | .unaryOp .widen32to64 e =>
-    "(" ++ microRustExprToString e ++ " as i64)"
+    "(" ++ microRustExprToString e ++ " as u32 as i64)"
   | .unaryOp .trunc64to32 e =>
-    "(" ++ microRustExprToString e ++ " as i32)"
+    "(" ++ microRustExprToString e ++ " as u32)"
   | .powCall base n =>
     "power(" ++ microRustExprToString base ++ ", " ++
       String.ofList (natToChars n) ++ ")"
@@ -129,11 +132,11 @@ def microRustExprToString : MicroCExpr → String
 
 @[simp] theorem microRustExprToString_unaryOp_widen (e : MicroCExpr) :
     microRustExprToString (.unaryOp .widen32to64 e) =
-      "(" ++ microRustExprToString e ++ " as i64)" := rfl
+      "(" ++ microRustExprToString e ++ " as u32 as i64)" := rfl
 
 @[simp] theorem microRustExprToString_unaryOp_trunc (e : MicroCExpr) :
     microRustExprToString (.unaryOp .trunc64to32 e) =
-      "(" ++ microRustExprToString e ++ " as i32)" := rfl
+      "(" ++ microRustExprToString e ++ " as u32)" := rfl
 
 @[simp] theorem microRustExprToString_powCall (base : MicroCExpr) (n : Nat) :
     microRustExprToString (.powCall base n) =
@@ -143,6 +146,18 @@ def microRustExprToString : MicroCExpr → String
 @[simp] theorem microRustExprToString_arrayAccess (base idx : MicroCExpr) :
     microRustExprToString (.arrayAccess base idx) =
       microRustExprToString base ++ "[" ++ microRustExprToString idx ++ " as usize]" := rfl
+
+/-- `as u32` keeps the low 32 bits of 3000000000; `as i32` would give -1294967296. -/
+theorem microRustExprToString_trunc_3000000000 :
+    microRustExprToString (.unaryOp .trunc64to32 (.litInt 3000000000)) = "(3000000000 as u32)" := by
+  simp (disch := decide) only [microRustExprToString, natToChars_of_ge, natToChars_of_lt]
+  decide
+
+/-- `as u32 as i64` zero-extends the low 32 bits of -5 to 4294967291. -/
+theorem microRustExprToString_widen_neg5 :
+    microRustExprToString (.unaryOp .widen32to64 (.litInt (-5))) = "((-5) as u32 as i64)" := by
+  simp (disch := decide) only [microRustExprToString, natToChars_of_lt]
+  decide
 
 /-! ## Statement Pretty-Printer (Rust syntax) -/
 

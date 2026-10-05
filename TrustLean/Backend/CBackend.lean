@@ -47,12 +47,12 @@ def binOpToC : BinOp → String
   | .bshl => "<<"
   | .bshr => ">>"
 
-/-- Convert a UnaryOp to the corresponding C prefix operator. -/
+/-- Convert a UnaryOp to the corresponding C prefix operator. Both casts compute `n % 2^32`. -/
 def unaryOpToC : UnaryOp → String
   | .neg => "-"
   | .lnot => "!"
-  | .widen32to64 => "(int64_t)"
-  | .trunc64to32 => "(int32_t)"
+  | .widen32to64 => "(int64_t)(uint32_t)"
+  | .trunc64to32 => "(uint32_t)"
 
 /-! ## C-Safe Variable Names (N9.2) -/
 

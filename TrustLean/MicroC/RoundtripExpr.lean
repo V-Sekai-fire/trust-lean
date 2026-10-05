@@ -217,7 +217,9 @@ private theorem exprSafe_binop_mid (op : MicroCBinOp)
 /-- pParenF fallthrough case: when first char is not '!' or '-'. -/
 private theorem pParenF_fallthrough (k : Nat) (c : Char) (cs : List Char)
     (h1 : c ≠ '!') (h2 : c ≠ '-')
-    (h3 : ∀ r, c :: cs ≠ '(' :: 'i' :: 'n' :: 't' :: '6' :: '4' :: '_' :: 't' :: ')' :: r) (h4 : ∀ r, c :: cs ≠ '(' :: 'i' :: 'n' :: 't' :: '3' :: '2' :: '_' :: 't' :: ')' :: r) :
+    (h3 : ∀ r, c :: cs ≠ '(' :: 'i' :: 'n' :: 't' :: '6' :: '4' :: '_' :: 't' :: ')' ::
+      '(' :: 'u' :: 'i' :: 'n' :: 't' :: '3' :: '2' :: '_' :: 't' :: ')' :: r)
+    (h4 : ∀ r, c :: cs ≠ '(' :: 'u' :: 'i' :: 'n' :: 't' :: '3' :: '2' :: '_' :: 't' :: ')' :: r) :
     pExprF.pParenF k (c :: cs) =
       match pExprF k (c :: cs) with
       | some (lhs, rest) =>
@@ -249,7 +251,8 @@ private theorem pParenF_lnot (k : Nat) (rest : List Char) :
 
 
 private theorem pParenF_widen (k : Nat) (rest : List Char) :
-    pExprF.pParenF k ('(' :: 'i' :: 'n' :: 't' :: '6' :: '4' :: '_' :: 't' :: ')' :: rest) =
+    pExprF.pParenF k ('(' :: 'i' :: 'n' :: 't' :: '6' :: '4' :: '_' :: 't' :: ')' ::
+      '(' :: 'u' :: 'i' :: 'n' :: 't' :: '3' :: '2' :: '_' :: 't' :: ')' :: rest) =
       match pExprF k rest with
       | some (e, rest') =>
         match skipWs rest' with
@@ -259,7 +262,7 @@ private theorem pParenF_widen (k : Nat) (rest : List Char) :
   unfold pExprF.pParenF; rfl
 
 private theorem pParenF_trunc (k : Nat) (rest : List Char) :
-    pExprF.pParenF k ('(' :: 'i' :: 'n' :: 't' :: '3' :: '2' :: '_' :: 't' :: ')' :: rest) =
+    pExprF.pParenF k ('(' :: 'u' :: 'i' :: 'n' :: 't' :: '3' :: '2' :: '_' :: 't' :: ')' :: rest) =
       match pExprF k rest with
       | some (e, rest') =>
         match skipWs rest' with
@@ -289,8 +292,11 @@ private theorem pParenF_neg (k : Nat) (c : Char) (rest : List Char)
 @[simp] private theorem str_rp : ")".toList = [')'] := rfl
 @[simp] private theorem str_dash : "-".toList = ['-'] := rfl
 @[simp] private theorem str_bang : "!".toList = ['!'] := rfl
-@[simp] private theorem str_widen : "(int64_t)".toList = ['(', 'i', 'n', 't', '6', '4', '_', 't', ')'] := rfl
-@[simp] private theorem str_trunc : "(int32_t)".toList = ['(', 'i', 'n', 't', '3', '2', '_', 't', ')'] := rfl
+@[simp] private theorem str_widen : "(int64_t)(uint32_t)".toList =
+    ['(', 'i', 'n', 't', '6', '4', '_', 't', ')', '(', 'u', 'i', 'n', 't', '3', '2', '_', 't', ')'] :=
+  rfl
+@[simp] private theorem str_trunc : "(uint32_t)".toList =
+    ['(', 'u', 'i', 'n', 't', '3', '2', '_', 't', ')'] := rfl
 @[simp] private theorem str_sp : " ".toList = [' '] := rfl
 @[simp] private theorem str_power_lp : "power(".toList = ['p', 'o', 'w', 'e', 'r', '('] := rfl
 @[simp] private theorem str_comma_sp : ", ".toList = [',', ' '] := rfl
@@ -570,57 +576,87 @@ theorem lparen_not_ident : ¬ IsIdentC '(' := by
 theorem rparen_not_ident : ¬ IsIdentC ')' := by
   simp [IsIdentC, Char.isAlpha, Char.isUpper, Char.isLower, Char.isDigit]
 
-/-- The printed form of a well-formed expression followed by a space never begins
-    `int<d1><d2>_t)`. -/
-theorem print_not_int_prefix (e : MicroCExpr) (he : WFExpr e) (d1 d2 : Char)
-    (h1 : d1 ≠ ' ' ∧ d1 ≠ '[') (h2 : d2 ≠ ' ' ∧ d2 ≠ '[') (t r : List Char) :
-    (microCExprToString e).toList ++ ' ' :: t ≠
-      'i' :: 'n' :: 't' :: d1 :: d2 :: '_' :: 't' :: ')' :: r := by
-  have hp : ∀ s, (s = ' ' ∨ s = '[') → s ∉ ['i', 'n', 't', d1, d2, '_', 't', ')'] := by
-    intro s hs hm; rcases hs with rfl | rfl <;> simp at hm <;> grind
-  have hnp : ∃ c ∈ ['i', 'n', 't', d1, d2, '_', 't', ')'], ¬ IsIdentC c :=
-    ⟨')', by simp, rparen_not_ident⟩
+instance : DecidablePred IsIdentC := fun c => inferInstanceAs (Decidable (_ ∨ _ ∨ _))
+
+private theorem not_mem_keyword (c0 : Char) (hc0 : c0.isAlpha = true) (w : List Char)
+    (hw : ∀ c ∈ w, IsIdentC c) (s : Char) (hs : ¬ IsIdentC s) (hsr : s ≠ ')') :
+    s ∉ c0 :: w ++ [')'] := by
+  intro hm
+  rcases List.mem_cons.mp hm with h | h
+  · exact hs (h ▸ Or.inl hc0)
+  · rcases List.mem_append.mp h with h | h
+    · exact hs (hw s h)
+    · exact hsr (List.mem_singleton.mp h)
+
+private theorem space_not_ident : ¬ IsIdentC ' ' := by decide
+private theorem lbracket_not_ident : ¬ IsIdentC '[' := by decide
+
+/-- The printed form of a well-formed expression followed by a space never begins with a
+    keyword `<c0><w>)` whose first character is a letter and the rest identifier characters. -/
+theorem print_not_keyword (e : MicroCExpr) (he : WFExpr e) (c0 : Char) (hc0 : c0.isAlpha = true)
+    (w : List Char) (hw : ∀ c ∈ w, IsIdentC c) (t r : List Char) :
+    (microCExprToString e).toList ++ ' ' :: t ≠ c0 :: w ++ ')' :: r := by
+  have hkw : c0 :: w ++ ')' :: r = (c0 :: w ++ [')']) ++ r := by simp
+  have hnp : ∃ c ∈ c0 :: w ++ [')'], ¬ IsIdentC c := ⟨')', by simp, rparen_not_ident⟩
+  have hsp := not_mem_keyword c0 hc0 w hw ' ' space_not_ident (by decide)
+  rw [hkw]
   cases he with
   | litInt n =>
     simp only [microCExprToString_litInt]
     split
-    · simp
+    · intro h; have h0 := congrArg List.head? h; simp at h0; subst h0; simp at hc0
     · have hne := natToChars_ne_nil n.toNat
       match hcs : natToChars n.toNat with
       | [] => exact absurd hcs hne
       | c' :: _ =>
         have hd := natToChars_all_digits n.toNat c' (by rw [hcs]; exact List.mem_cons_self ..)
         simp only [String.toList_ofList, List.cons_append, ne_eq, List.cons.injEq, not_and]
-        intro h; subst h; simp [Char.isDigit] at hd
-  | litBool b => cases b <;> simp [microCExprToString]
+        intro h; subst h; rw [isAlpha_not_isDigit c' hc0] at hd; exact absurd hd (by decide)
+  | litBool b =>
+    cases b
+    · exact idrun_ne ['f', 'a', 'l', 's', 'e'] ' ' t _ r (by decide) hsp hnp
+    · exact idrun_ne ['t', 'r', 'u', 'e'] ' ' t _ r (by decide) hsp hnp
   | varRef name _ _ hcont _ =>
-    have := idrun_ne name.toList ' ' t _ r hcont (hp ' ' (Or.inl rfl)) hnp
+    have := idrun_ne name.toList ' ' t _ r hcont hsp hnp
     simpa using this
-  | binOp _ _ _ _ _ => simp [microCExprToString_binOp]
-  | unaryOp _ _ _ => simp [microCExprToString_unaryOp]
-  | powCall _ _ _ => simp [microCExprToString_powCall]
+  | binOp _ _ _ _ _ =>
+    intro h; have h0 := congrArg List.head? h; simp at h0; subst h0; simp at hc0
+  | unaryOp _ _ _ =>
+    intro h; have h0 := congrArg List.head? h; simp at h0; subst h0; simp at hc0
+  | powCall b n _ =>
+    have hlp := not_mem_keyword c0 hc0 w hw '(' lparen_not_ident (by decide)
+    have := idrun_ne ['p', 'o', 'w', 'e', 'r'] '('
+      ((microCExprToString b).toList ++ ',' :: ' ' :: (natToChars n ++ ')' :: ' ' :: t))
+      _ r (by decide) hlp hnp
+    simpa [microCExprToString_powCall, String.toList_append] using this
   | arrayAccess _ idx hb _ hbv =>
     obtain ⟨vname, rfl⟩ := hbv
+    have hlb := not_mem_keyword c0 hc0 w hw '[' lbracket_not_ident (by decide)
     cases hb with
     | varRef _ _ _ hcont _ =>
-      have := idrun_ne vname.toList '[' ((microCExprToString idx).toList ++ ']' :: ' ' :: t) _ r hcont (hp '[' (Or.inr rfl)) hnp
+      have := idrun_ne vname.toList '[' ((microCExprToString idx).toList ++ ']' :: ' ' :: t) _ r
+        hcont hlb hnp
       simpa [microCExprToString_arrayAccess, String.toList_append] using this
 
-/-- The printed form of a well-formed expression followed by a space never begins
-    with a C cast `(int<d1><d2>_t)`, so the parser's binary-operator fallthrough applies. -/
-theorem print_not_cast (e : MicroCExpr) (he : WFExpr e) (d1 d2 : Char)
-    (h1 : d1 ≠ ' ' ∧ d1 ≠ '[') (h2 : d2 ≠ ' ' ∧ d2 ≠ '[') (t r : List Char) :
-    (microCExprToString e).toList ++ ' ' :: t ≠
-      '(' :: 'i' :: 'n' :: 't' :: d1 :: d2 :: '_' :: 't' :: ')' :: r := by
-  have hp : ∀ s, (s = ' ' ∨ s = '[') → s ∉ ['(', 'i', 'n', 't', d1, d2, '_', 't', ')'] := by
-    intro s hs hm; rcases hs with rfl | rfl <;> simp at hm <;> grind
-  have hnp : ∃ c ∈ ['(', 'i', 'n', 't', d1, d2, '_', 't', ')'], ¬ IsIdentC c :=
-    ⟨'(', by simp, lparen_not_ident⟩
+/-- The printed form of a well-formed expression followed by a space never begins with a
+    C cast `(<c0><w>)`, so the parser's binary-operator fallthrough applies. -/
+theorem print_not_cast (e : MicroCExpr) (he : WFExpr e) (c0 : Char) (hc0 : c0.isAlpha = true)
+    (w : List Char) (hw : ∀ c ∈ w, IsIdentC c) (t r : List Char) :
+    (microCExprToString e).toList ++ ' ' :: t ≠ '(' :: c0 :: w ++ ')' :: r := by
+  have hp : ∀ s, (s = ' ' ∨ s = '[') → s ∉ '(' :: c0 :: w ++ [')'] := by
+    intro s hs hm
+    rcases List.mem_cons.mp hm with h | h
+    · rcases hs with rfl | rfl <;> exact absurd h (by decide)
+    · rcases hs with rfl | rfl
+      · exact not_mem_keyword c0 hc0 w hw ' ' space_not_ident (by decide) h
+      · exact not_mem_keyword c0 hc0 w hw '[' lbracket_not_ident (by decide) h
+  have hnp : ∃ c ∈ '(' :: c0 :: w ++ [')'], ¬ IsIdentC c := ⟨'(', by simp, lparen_not_ident⟩
+  have hkw : '(' :: c0 :: w ++ ')' :: r = ('(' :: c0 :: w ++ [')']) ++ r := by simp
   cases he with
   | litInt n =>
     simp only [microCExprToString_litInt]
     split
-    · simp
+    · intro h; simp at h; obtain ⟨h, -⟩ := h; subst h; simp at hc0
     · have hne := natToChars_ne_nil n.toNat
       match hcs : natToChars n.toNat with
       | [] => exact absurd hcs hne
@@ -630,20 +666,38 @@ theorem print_not_cast (e : MicroCExpr) (he : WFExpr e) (d1 d2 : Char)
         intro h; subst h; simp [Char.isDigit] at hd
   | litBool b => cases b <;> simp [microCExprToString]
   | varRef name _ _ hcont _ =>
+    rw [hkw]
     have := idrun_ne name.toList ' ' t _ r hcont (hp ' ' (Or.inl rfl)) hnp
     simpa using this
   | binOp op l rr hl _ =>
-    have := print_not_int_prefix l hl d1 d2 h1 h2
+    have := print_not_keyword l hl c0 hc0 w hw
       ((microCBinOpToString op).toList ++ ' ' :: (microCExprToString rr).toList ++ ')' :: ' ' :: t) r
     simpa [microCExprToString_binOp, String.toList_append] using this
-  | unaryOp op _ _ => cases op <;> simp [microCExprToString_unaryOp, microCUnaryOpToString]
+  | unaryOp op _ _ =>
+    cases op <;> simp [microCExprToString_unaryOp, microCUnaryOpToString] <;>
+      intro h <;> subst h <;> simp at hc0
   | powCall _ _ _ => simp [microCExprToString_powCall]
   | arrayAccess _ idx hb _ hbv =>
     obtain ⟨vname, rfl⟩ := hbv
+    rw [hkw]
     cases hb with
     | varRef _ _ _ hcont _ =>
-      have := idrun_ne vname.toList '[' ((microCExprToString idx).toList ++ ']' :: ' ' :: t) _ r hcont (hp '[' (Or.inr rfl)) hnp
+      have := idrun_ne vname.toList '[' ((microCExprToString idx).toList ++ ']' :: ' ' :: t) _ r
+        hcont (hp '[' (Or.inr rfl)) hnp
       simpa [microCExprToString_arrayAccess, String.toList_append] using this
+
+/-- `(int64_t)(uint32_t)`, the printed widening cast, is a cast prefix the fallthrough excludes. -/
+private theorem print_not_widen (e : MicroCExpr) (he : WFExpr e) (t r : List Char) :
+    (microCExprToString e).toList ++ ' ' :: t ≠ '(' :: 'i' :: 'n' :: 't' :: '6' :: '4' :: '_' ::
+      't' :: ')' :: '(' :: 'u' :: 'i' :: 'n' :: 't' :: '3' :: '2' :: '_' :: 't' :: ')' :: r :=
+  print_not_cast e he 'i' (by decide) ['n', 't', '6', '4', '_', 't'] (by decide) t
+    ('(' :: 'u' :: 'i' :: 'n' :: 't' :: '3' :: '2' :: '_' :: 't' :: ')' :: r)
+
+/-- `(uint32_t)`, the printed truncating cast, is a cast prefix the fallthrough excludes. -/
+private theorem print_not_trunc (e : MicroCExpr) (he : WFExpr e) (t r : List Char) :
+    (microCExprToString e).toList ++ ' ' :: t ≠
+      '(' :: 'u' :: 'i' :: 'n' :: 't' :: '3' :: '2' :: '_' :: 't' :: ')' :: r :=
+  print_not_cast e he 'u' (by decide) ['i', 'n', 't', '3', '2', '_', 't'] (by decide) t r
 
 
 /-! ## Main Theorem: Expression Roundtrip with Remainder -/
@@ -837,7 +891,15 @@ theorem expr_roundtrip_with_rest (e : MicroCExpr) (he : WFExpr e) (hs : NegLitDi
       simp only [List.cons_append]
       rw [skipWs_nonws c_l _ h_nonws_l]
       -- Fallthrough: first char c_l is not '!' or '-'
-      rw [pParenF_fallthrough k c_l _ h_not_bang_l h_not_neg_l (by intro r h; exact print_not_cast lhs h_l '6' '4' ⟨by decide, by decide⟩ ⟨by decide, by decide⟩ ((microCBinOpToString op).toList ++ (' ' :: (microCExprToString rhs).toList ++ (')' :: rest))) r (by rw [h_head_l]; simpa using h)) (by intro r h; exact print_not_cast lhs h_l '3' '2' ⟨by decide, by decide⟩ ⟨by decide, by decide⟩ ((microCBinOpToString op).toList ++ (' ' :: (microCExprToString rhs).toList ++ (')' :: rest))) r (by rw [h_head_l]; simpa using h))]
+      rw [pParenF_fallthrough k c_l _ h_not_bang_l h_not_neg_l
+        (by intro r h; exact print_not_widen lhs h_l
+              ((microCBinOpToString op).toList ++
+                (' ' :: (microCExprToString rhs).toList ++ (')' :: rest))) r
+              (by rw [h_head_l]; simpa using h))
+        (by intro r h; exact print_not_trunc lhs h_l
+              ((microCBinOpToString op).toList ++
+                (' ' :: (microCExprToString rhs).toList ++ (')' :: rest))) r
+              (by rw [h_head_l]; simpa using h))]
       -- Apply IH_l: parse lhs
       have h_safe_mid : ExprSafe mid :=
         exprSafe_binop_mid op (microCExprToString rhs).toList rest
