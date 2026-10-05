@@ -112,6 +112,12 @@ jobs:
       - name: The minimal export example's C, built with cc -std=c11 -Wall -Werror, prints what ImpStmt.eval computes
         run: lake env lean --run examples/Export.lean
 
+      - name: A store past a short buffer, int32_t declarations and unsuffixed literals fail the exported ring functions
+        run: lake env lean --run examples/Ring.lean --self-test
+
+      - name: The ring functions emitFile exports, built under clang -Wall -Werror with ASan and UBSan, print what evalFunc_u32 computes
+        run: lake env lean --run examples/Ring.lean
+
       - name: Planted cast spellings fail the Rust cast harness
         run: lake env lean --run scripts/CheckRustCasts.lean --self-test
 
