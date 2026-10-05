@@ -322,8 +322,9 @@ theorem pIdentR_exact (name : String) (rest : List Char)
     have htail : ∀ c ∈ tail, c.isAlpha = true ∨ c.isDigit = true ∨ c = '_' := by
       intro c hc; exact hcont c (by rw [hcs]; exact List.mem_cons_of_mem first hc)
     rw [pIdentR_go_exact [] tail rest htail hrest]
-    simp
-    exact congrArg String.ofList (hcs.symm) |>.symm ▸ String.ofList_toList.symm ▸ rfl
+    have hrt := String.ofList_toList (s := name)
+    rw [hcs] at hrt
+    simpa using hrt
 
 /-! ## ExprSafeR: rest-safety for Rust expression parsing -/
 
@@ -1164,7 +1165,6 @@ theorem rustExpr_roundtrip_with_rest (e : MicroCExpr) (he : WFExprRust e)
               · simp [String.toList_append] at h_head_e
                 obtain ⟨rfl, _⟩ := h_head_e
                 simp [Char.isDigit] at hd
-                exact absurd hd (by native_decide)
               · exact absurd rfl (h_not_lit n (by omega))
             | litBool b =>
               cases b <;> simp [microRustExprToString] at h_head_e <;>

@@ -387,6 +387,12 @@ theorem expr_compat_safe (e : LowLevelExpr)
   | powCall base n ih =>
     simp only [exprToMicroC, exprToMicroRust]
     exact congrArg (MicroCExpr.powCall · n) ih
+  | addrOf v =>
+    simp only [exprToMicroC, exprToMicroRust, varNameToC, varNameToRust]
+    cases v with
+    | user s => exact congrArg MicroCExpr.varRef (h (VarName.user s))
+    | temp n => rfl
+    | array s n => rfl
 
 /-! ## Section 6: Pipeline Tests — translate + print + parse roundtrip -/
 
