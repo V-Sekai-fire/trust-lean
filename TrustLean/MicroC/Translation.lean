@@ -11,11 +11,12 @@
   - stmtToMicroC : Stmt → MicroCStmt (structural, no fuel)
   - for_ desugared to seq + while_ (matching CBackend.stmtToC behavior)
   - call translated structurally (both sides return none anyway)
-  - Uses varNameToC from CBackend for identifier conversion
+  - Uses varNameToC from Backend/Common for identifier conversion
 -/
 
 import TrustLean.MicroC.AST
-import TrustLean.Backend.CBackend
+import TrustLean.Core.Stmt
+import TrustLean.Backend.Common
 
 set_option autoImplicit false
 
