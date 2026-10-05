@@ -35,3 +35,7 @@ import TrustLean.MicroC.UnsignedEval
 import TrustLean.MicroC.UnsignedAgreement
 import TrustLean.MicroC.UnsignedFuelMono
 import TrustLean.MicroC.UnsignedSimulation
+-- typed declarations
+import TrustLean.MicroC.Typed
+import TrustLean.MicroC.TypedRoundtrip
+import TrustLean.MicroC.TypedEval
