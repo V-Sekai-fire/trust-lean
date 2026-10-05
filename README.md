@@ -92,6 +92,9 @@ lake env lean --run scripts/CheckVacuity.lean
 # and every typed program computes what evalTyped says
 lake env lean --run scripts/CheckTypedC.lean
 
+# Fail unless printed uint32_t statements over an array compute what evalS32 says
+lake env lean --run scripts/CheckS32C.lean
+
 # Run integration tests
 lake env lean TrustLean/Tests/Integration.lean
 ```
@@ -164,6 +167,15 @@ with the type all its writes share, or `int64_t` when they differ; a variable th
 must be a parameter. A typed program (`MicroC/Typed.lean`) declares `uint32_t`, `int64_t` and
 `bool` variables; `master_typed_roundtrip` parses its printed form back, and `evalTyped` is its
 semantics, equal to `evalMicroC_uint32` on the `uint32_t` subset.
+
+`evalS32` (`MicroC/UnsignedSimulation.lean`) runs a statement on Lean's `UInt32` and `Bool`.
+`evalMicroC_uint32_eq_evalS32` shows `evalMicroC_uint32` computes the same values on every
+statement whose literals lie in `[0, 2^32)` and which uses no cast or `power`, at every fuel and
+with no range hypothesis, so a counter that wraps past 2^32 is covered. `evalMicroCWith S` and
+`evalStmtWith S.core` take the operators as a parameter; `evalMicroC`, `evalMicroC_uint32`,
+`evalMicroC_uint64` and `evalMicroC_int64` are proved equal to its four instances, and
+`stmtToMicroC_correct_with` gives `stmtToMicroC_correct` with its `_uint32`, `_uint64` and
+`_int64` forms.
 
 ## Performance
 
