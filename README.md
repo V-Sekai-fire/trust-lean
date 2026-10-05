@@ -88,6 +88,10 @@ lake env lean --run scripts/CheckAxioms.lean
 # Fail unless the proof that VarNameInjective is false stops compiling
 lake env lean --run scripts/CheckVacuity.lean
 
+# Fail unless every emitted C program compiles under clang -std=c11 -Wall -Werror -fsanitize=undefined
+# and every typed program computes what evalTyped says
+lake env lean --run scripts/CheckTypedC.lean
+
 # Run integration tests
 lake env lean TrustLean/Tests/Integration.lean
 ```
@@ -130,17 +134,24 @@ def sumProgram : ImpStmt :=
 ### C Backend: Generate verified C code
 
 ```lean
--- Generate C function from a Stmt
-def cCode := generateCFunction defaultCConfig "compute"
+-- Generate C function from a Stmt and a result expression
+def cCode := generateCFunction { includePowerHelper := false } "compute"
   [("x", "int64_t"), ("y", "int64_t")]
-  "int64_t"
   (.assign (.user "result") (.binOp .add (.varRef (.user "x")) (.varRef (.user "y"))))
+  (.varRef (.user "result"))
 
 -- Produces:
 -- int64_t compute(int64_t x, int64_t y) {
---   result = (x + y);
+-- int64_t result = 0; (void)result;
+-- { result = (x + y); }
+-- return result;
 -- }
 ```
+
+The body and the return print through `microCToString`, which `master_roundtrip` covers, after
+`printTyped`'s declarations. A typed program (`MicroC/Typed.lean`) declares `uint32_t`,
+`int64_t` and `bool` variables; `master_typed_roundtrip` parses its printed form back, and
+`evalTyped` is its semantics, equal to `evalMicroC_uint32` on the `uint32_t` subset.
 
 ## Performance
 
