@@ -6,7 +6,9 @@
   the int64 evaluator agrees with the unbounded evaluator.
 
   Key theorems:
-  - evalMicroCBinOp_int64_agree: general BinOp agreement
+  - evalMicroCBinOp_int64_refines / evalMicroCUnaryOp_int64_refines: a value the int64
+    evaluator returns is the value the unbounded evaluator returns
+  - evalMicroCBinOp_int64_agree: general BinOp agreement (shifts: per-op theorems)
   - evalMicroCUnaryOp_int64_agree: general UnaryOp agreement
   - Per-operator convenience theorems for add/sub/mul
   - Non-vacuity example: concrete overflow-free program agreement
@@ -25,21 +27,21 @@ theorem evalMicroCBinOp_int64_agree_add (a b : Int) (h : InInt64Range (a + b)) :
     evalMicroCBinOp_int64 .add (.int a) (.int b) =
     evalMicroCBinOp .add (.int a) (.int b) := by
   simp only [evalMicroCBinOp_int64_add, evalMicroCBinOp, microCBinOpToCore, evalBinOp_add,
-             addInt64, wrapInt64_of_inRange _ h]
+             checkedInt64_of_inRange h, Option.map_some]
 
 /-- Subtraction agrees when result is in Int64 range. -/
 theorem evalMicroCBinOp_int64_agree_sub (a b : Int) (h : InInt64Range (a - b)) :
     evalMicroCBinOp_int64 .sub (.int a) (.int b) =
     evalMicroCBinOp .sub (.int a) (.int b) := by
   simp only [evalMicroCBinOp_int64_sub, evalMicroCBinOp, microCBinOpToCore, evalBinOp_sub,
-             subInt64, wrapInt64_of_inRange _ h]
+             checkedInt64_of_inRange h, Option.map_some]
 
 /-- Multiplication agrees when result is in Int64 range. -/
 theorem evalMicroCBinOp_int64_agree_mul (a b : Int) (h : InInt64Range (a * b)) :
     evalMicroCBinOp_int64 .mul (.int a) (.int b) =
     evalMicroCBinOp .mul (.int a) (.int b) := by
   simp only [evalMicroCBinOp_int64_mul, evalMicroCBinOp, microCBinOpToCore, evalBinOp_mul,
-             mulInt64, wrapInt64_of_inRange _ h]
+             checkedInt64_of_inRange h, Option.map_some]
 
 /-! ## Non-Arithmetic BinOp Agreement (Unconditional) -/
 
@@ -74,50 +76,75 @@ theorem evalMicroCBinOp_int64_agree_band (a b : Int) (h : InInt64Range (Int.land
     evalMicroCBinOp_int64 .band (.int a) (.int b) =
     evalMicroCBinOp .band (.int a) (.int b) := by
   simp only [evalMicroCBinOp_int64_band, evalMicroCBinOp, microCBinOpToCore, evalBinOp_band,
-             wrapInt64_of_inRange _ h]
+             checkedInt64_of_inRange h, Option.map_some]
 
 /-- Bitwise OR agrees when result is in Int64 range. -/
 theorem evalMicroCBinOp_int64_agree_bor (a b : Int) (h : InInt64Range (Int.lor a b)) :
     evalMicroCBinOp_int64 .bor (.int a) (.int b) =
     evalMicroCBinOp .bor (.int a) (.int b) := by
   simp only [evalMicroCBinOp_int64_bor, evalMicroCBinOp, microCBinOpToCore, evalBinOp_bor,
-             wrapInt64_of_inRange _ h]
+             checkedInt64_of_inRange h, Option.map_some]
 
 /-- Bitwise XOR agrees when result is in Int64 range. -/
 theorem evalMicroCBinOp_int64_agree_bxor (a b : Int) (h : InInt64Range (Int.xor a b)) :
     evalMicroCBinOp_int64 .bxor (.int a) (.int b) =
     evalMicroCBinOp .bxor (.int a) (.int b) := by
   simp only [evalMicroCBinOp_int64_bxor, evalMicroCBinOp, microCBinOpToCore, evalBinOp_bxor,
-             wrapInt64_of_inRange _ h]
+             checkedInt64_of_inRange h, Option.map_some]
 
-/-- Left shift agrees when result is in Int64 range. -/
-theorem evalMicroCBinOp_int64_agree_bshl (a b : Int)
+/-- Left shift agrees when the count is in `[0, 64)`, the shifted value is non-negative and
+    the result is in Int64 range. -/
+theorem evalMicroCBinOp_int64_agree_bshl (a b : Int) (hb : 0 ≤ b ∧ b < 64) (ha : 0 ≤ a)
     (h : InInt64Range (Int.shiftLeft a (b.toNat % 64))) :
     evalMicroCBinOp_int64 .bshl (.int a) (.int b) =
     evalMicroCBinOp .bshl (.int a) (.int b) := by
+  have hm : b.toNat % 64 = b.toNat := Nat.mod_eq_of_lt (by omega)
+  have hc : 0 ≤ b ∧ b < 64 ∧ 0 ≤ a := ⟨hb.1, hb.2, ha⟩
+  rw [hm] at h
   simp only [evalMicroCBinOp_int64_bshl, evalMicroCBinOp, microCBinOpToCore, evalBinOp_bshl,
-             wrapInt64_of_inRange _ h]
+             shlInt64, if_pos hc, checkedInt64_of_inRange h, Option.map_some, hm]
 
-/-- Right shift agrees when result is in Int64 range. -/
-theorem evalMicroCBinOp_int64_agree_bshr (a b : Int)
+/-- Right shift agrees when the count is in `[0, 64)`, the shifted value is non-negative and
+    the result is in Int64 range. -/
+theorem evalMicroCBinOp_int64_agree_bshr (a b : Int) (hb : 0 ≤ b ∧ b < 64) (ha : 0 ≤ a)
     (h : InInt64Range (Int.shiftRight a (b.toNat % 64))) :
     evalMicroCBinOp_int64 .bshr (.int a) (.int b) =
     evalMicroCBinOp .bshr (.int a) (.int b) := by
+  have hm : b.toNat % 64 = b.toNat := Nat.mod_eq_of_lt (by omega)
+  have hc : 0 ≤ b ∧ b < 64 ∧ 0 ≤ a := ⟨hb.1, hb.2, ha⟩
+  rw [hm] at h
   simp only [evalMicroCBinOp_int64_bshr, evalMicroCBinOp, microCBinOpToCore, evalBinOp_bshr,
-             wrapInt64_of_inRange _ h]
+             shrInt64, if_pos hc, checkedInt64_of_inRange h, Option.map_some, hm]
 
 /-! ## General BinOp Agreement -/
 
-/-- General BinOp agreement: if every Int result of the unbounded evaluator
-    is in Int64 range, the int64 evaluator agrees.
+/-- General BinOp agreement for every operator but the shifts: if every Int result of the
+    unbounded evaluator is in Int64 range, the int64 evaluator agrees.
     For comparison/logical ops, the hypothesis is vacuously satisfied
     (they produce Bool, not Int). -/
 theorem evalMicroCBinOp_int64_agree (op : MicroCBinOp) (v1 v2 : Value)
+    (hop : op ≠ .bshl ∧ op ≠ .bshr)
     (h : ∀ n, evalMicroCBinOp op v1 v2 = some (.int n) → InInt64Range n) :
     evalMicroCBinOp_int64 op v1 v2 = evalMicroCBinOp op v1 v2 := by
   cases op <;> cases v1 <;> cases v2 <;>
     simp_all [evalMicroCBinOp_int64, evalMicroCBinOp, evalBinOp, microCBinOpToCore,
-              addInt64, subInt64, mulInt64, wrapInt64_of_inRange]
+              checkedInt64_of_inRange]
+
+/-- A value the int64 binary evaluator returns is the value the unbounded evaluator returns. -/
+theorem evalMicroCBinOp_int64_refines (op : MicroCBinOp) (v1 v2 v : Value)
+    (h : evalMicroCBinOp_int64 op v1 v2 = some v) : evalMicroCBinOp op v1 v2 = some v := by
+  cases op <;> cases v1 <;> cases v2 <;>
+    simp only [evalMicroCBinOp_int64, Option.map_eq_some_iff] at h <;>
+    simp only [evalMicroCBinOp, microCBinOpToCore, evalBinOp] <;>
+    first
+    | exact h
+    | (obtain ⟨m, hm, rfl⟩ := h; rw [(checkedInt64_eq_some.mp hm).2])
+    | (obtain ⟨m, hm, rfl⟩ := h
+       obtain ⟨⟨hb0, hb1, -⟩, hc⟩ := shlInt64_eq_some.mp hm
+       rw [(checkedInt64_eq_some.mp hc).2, Nat.mod_eq_of_lt (by omega)])
+    | (obtain ⟨m, hm, rfl⟩ := h
+       obtain ⟨⟨hb0, hb1, -⟩, hc⟩ := shrInt64_eq_some.mp hm
+       rw [(checkedInt64_eq_some.mp hc).2, Nat.mod_eq_of_lt (by omega)])
 
 /-! ## UnaryOp Agreement -/
 
@@ -126,7 +153,7 @@ theorem evalMicroCUnaryOp_int64_agree_neg (n : Int) (h : InInt64Range (-n)) :
     evalMicroCUnaryOp_int64 .neg (.int n) =
     evalMicroCUnaryOp .neg (.int n) := by
   simp only [evalMicroCUnaryOp_int64_neg, evalMicroCUnaryOp, evalUnaryOp, microCUnaryOpToCore,
-             negInt64, wrapInt64_of_inRange _ h]
+             checkedInt64_of_inRange h, Option.map_some]
 
 /-- Logical not always agrees (operates on Bool). -/
 theorem evalMicroCUnaryOp_int64_agree_lnot (b : Bool) :
@@ -140,7 +167,17 @@ theorem evalMicroCUnaryOp_int64_agree (op : MicroCUnaryOp) (v : Value)
     evalMicroCUnaryOp_int64 op v = evalMicroCUnaryOp op v := by
   cases op <;> cases v <;>
     simp_all [evalMicroCUnaryOp_int64, evalMicroCUnaryOp, evalUnaryOp, microCUnaryOpToCore,
-              negInt64, wrapInt64_of_inRange]
+              checkedInt64_of_inRange]
+
+/-- A value the int64 unary evaluator returns is the value the unbounded evaluator returns. -/
+theorem evalMicroCUnaryOp_int64_refines (op : MicroCUnaryOp) (v w : Value)
+    (h : evalMicroCUnaryOp_int64 op v = some w) : evalMicroCUnaryOp op v = some w := by
+  cases op <;> cases v <;>
+    simp only [evalMicroCUnaryOp_int64, Option.map_eq_some_iff] at h <;>
+    simp only [evalMicroCUnaryOp, microCUnaryOpToCore, evalUnaryOp] <;>
+    first
+    | exact h
+    | (obtain ⟨m, hm, rfl⟩ := h; rw [(checkedInt64_eq_some.mp hm).2])
 
 /-! ## Non-Vacuity: Overflow-Free Program Agreement -/
 

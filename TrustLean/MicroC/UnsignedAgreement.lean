@@ -7,7 +7,8 @@
   - Bitwise (band/bor/bxor/bshl/bshr): CONDITIONAL on InUInt32Range(result)
     (For well-formed unsigned programs where inputs are in [0, 2^32),
      AND/OR/XOR results are always in range since these ops can only clear bits.
-     SHL may exceed range if shift amount is large. SHR always reduces.)
+     SHL may exceed range if shift amount is large. SHR always reduces.
+     Shifts also need a count in [0, 32), outside which C11 6.5.7p3 is undefined.)
   - Comparison/logical (eqOp/ltOp/land/lor): UNCONDITIONAL (produce Bool)
   - Casting (widen/trunc): CONDITIONAL on InUInt32Range(result)
 -/
@@ -89,28 +90,40 @@ theorem evalMicroCBinOp_uint32_agree_bxor (a b : Int) (h : InUInt32Range (Int.xo
   simp only [evalMicroCBinOp_uint32_bxor, evalMicroCBinOp, evalBinOp, microCBinOpToCore,
              wrapWidth_of_inRange 32 _ h.1 h.2]
 
-theorem evalMicroCBinOp_uint32_agree_bshl (a b : Int)
+theorem evalMicroCBinOp_uint32_agree_bshl (a b : Int) (hb : 0 ≤ b ∧ b < 32)
     (h : InUInt32Range (Int.shiftLeft a (b.toNat % 64))) :
     evalMicroCBinOp_uint32 .bshl (.int a) (.int b) =
     evalMicroCBinOp .bshl (.int a) (.int b) := by
-  simp only [evalMicroCBinOp_uint32_bshl, evalMicroCBinOp, evalBinOp, microCBinOpToCore,
-             wrapWidth_of_inRange 32 _ h.1 h.2]
+  have hm : b.toNat % 64 = b.toNat := Nat.mod_eq_of_lt (by omega)
+  rw [hm] at h
+  simp only [evalMicroCBinOp_uint32_bshl, if_pos hb, evalMicroCBinOp, evalBinOp, microCBinOpToCore,
+             hm, wrapWidth_of_inRange 32 _ h.1 h.2]
 
-theorem evalMicroCBinOp_uint32_agree_bshr (a b : Int)
+theorem evalMicroCBinOp_uint32_agree_bshr (a b : Int) (hb : 0 ≤ b ∧ b < 32)
     (h : InUInt32Range (Int.shiftRight a (b.toNat % 64))) :
     evalMicroCBinOp_uint32 .bshr (.int a) (.int b) =
     evalMicroCBinOp .bshr (.int a) (.int b) := by
-  simp only [evalMicroCBinOp_uint32_bshr, evalMicroCBinOp, evalBinOp, microCBinOpToCore,
-             wrapWidth_of_inRange 32 _ h.1 h.2]
+  have hm : b.toNat % 64 = b.toNat := Nat.mod_eq_of_lt (by omega)
+  rw [hm] at h
+  simp only [evalMicroCBinOp_uint32_bshr, if_pos hb, evalMicroCBinOp, evalBinOp, microCBinOpToCore,
+             hm, wrapWidth_of_inRange 32 _ h.1 h.2]
 
 /-! ## General UInt32 BinOp Agreement -/
 
 /-- General BinOp agreement: if every Int result of the unbounded evaluator
-    is in UInt32 range, the uint32 evaluator agrees. -/
+    is in UInt32 range and a shift count is in `[0, 32)`, the uint32 evaluator agrees. -/
 theorem evalMicroCBinOp_uint32_agree (op : MicroCBinOp) (v1 v2 : Value)
+    (hs : ∀ b, (op = .bshl ∨ op = .bshr) → v2 = .int b → 0 ≤ b ∧ b < 32)
     (h : ∀ n, evalMicroCBinOp op v1 v2 = some (.int n) → InUInt32Range n) :
     evalMicroCBinOp_uint32 op v1 v2 = evalMicroCBinOp op v1 v2 := by
-  cases op <;> cases v1 <;> cases v2 <;>
+  cases op <;> cases v1 <;> cases v2
+  case bshl.int.int a b =>
+    have hb := hs b (Or.inl rfl) rfl
+    exact evalMicroCBinOp_uint32_agree_bshl a b hb (h _ rfl)
+  case bshr.int.int a b =>
+    have hb := hs b (Or.inr rfl) rfl
+    exact evalMicroCBinOp_uint32_agree_bshr a b hb (h _ rfl)
+  all_goals
     simp_all [evalMicroCBinOp_uint32, evalMicroCBinOp, evalBinOp, microCBinOpToCore,
               addUInt32, subUInt32, mulUInt32]
   all_goals (rename_i h; exact wrapWidth_of_inRange 32 _ h.1 h.2)

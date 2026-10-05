@@ -13,7 +13,7 @@
   - Flat namespace: no shadowing, no nested scopes (v2.0.0 simplification)
   - MicroCEnv: String → Value (functional environment, no heap)
   - No short-circuit &&/||: pure expressions, so semantically equivalent
-  - Int = Lean Int (unbounded): int64_t wrapping deferred to v3.0
+  - Int = Lean Int (unbounded) in evalMicroC; the int64/uint32/uint64 evaluators bound it
 -/
 
 import TrustLean.Core.Value
@@ -45,8 +45,8 @@ inductive MicroCBinOp where
 inductive MicroCUnaryOp where
   | neg          -- - (integer negation)
   | lnot         -- ! (boolean negation)
-  | widen32to64  -- (int64_t) cast (zero-extend)
-  | trunc64to32  -- (int32_t) cast (truncate)
+  | widen32to64  -- (int64_t)(uint32_t) cast (zero-extend the low 32 bits)
+  | trunc64to32  -- (uint32_t) cast (keep the low 32 bits)
   deriving Repr, BEq, DecidableEq, Inhabited
 
 /-! ## MicroC Expressions -/

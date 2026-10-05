@@ -6,8 +6,8 @@
   Wraps at operation boundaries only.
   Dedicated @[simp] lemmas per constructor.
 
-  Key difference from uint32/uint64: shift modulus = % 128 (not % 64),
-  modeling __uint128_t hardware behavior.
+  Key difference from uint32/uint64: shift counts range over [0, 128), the width of
+  unsigned __int128; a count outside it is undefined and gives none.
 -/
 import TrustLean.MicroC.Eval
 import TrustLean.MicroC.UInt128
@@ -21,7 +21,7 @@ namespace TrustLean
 /-- Evaluate a MicroC binary operator with UInt128 wrapping.
     Arithmetic results (add, sub, mul) are wrapped via wrapUInt128.
     Bitwise results are wrapped via wrapUInt128.
-    Shift amounts use % 128 (modeling __uint128_t behavior).
+    A shift count outside `[0, 128)` is undefined and gives `none`.
     Comparison and logical operations return Bool, unchanged. -/
 def evalMicroCBinOp_uint128 (op : MicroCBinOp) (v1 v2 : Value) : Option Value :=
   match op, v1, v2 with
@@ -35,8 +35,10 @@ def evalMicroCBinOp_uint128 (op : MicroCBinOp) (v1 v2 : Value) : Option Value :=
   | .band, .int a, .int b => some (.int (wrapUInt128 (Int.land a b)))
   | .bor, .int a, .int b => some (.int (wrapUInt128 (Int.lor a b)))
   | .bxor, .int a, .int b => some (.int (wrapUInt128 (Int.xor a b)))
-  | .bshl, .int a, .int b => some (.int (wrapUInt128 (Int.shiftLeft a (b.toNat % 128))))
-  | .bshr, .int a, .int b => some (.int (wrapUInt128 (Int.shiftRight a (b.toNat % 128))))
+  | .bshl, .int a, .int b =>
+    if 0 ≤ b ∧ b < 128 then some (.int (wrapUInt128 (Int.shiftLeft a b.toNat))) else none
+  | .bshr, .int a, .int b =>
+    if 0 ≤ b ∧ b < 128 then some (.int (wrapUInt128 (Int.shiftRight a b.toNat))) else none
   | _, _, _ => none
 
 /-- Evaluate a MicroC unary operator with UInt128 wrapping. -/
@@ -72,10 +74,10 @@ def evalMicroCUnaryOp_uint128 (op : MicroCUnaryOp) (v : Value) : Option Value :=
     evalMicroCBinOp_uint128 .bxor (.int a) (.int b) = some (.int (wrapUInt128 (Int.xor a b))) := rfl
 @[simp] theorem evalMicroCBinOp_uint128_bshl (a b : Int) :
     evalMicroCBinOp_uint128 .bshl (.int a) (.int b) =
-    some (.int (wrapUInt128 (Int.shiftLeft a (b.toNat % 128)))) := rfl
+    if 0 ≤ b ∧ b < 128 then some (.int (wrapUInt128 (Int.shiftLeft a b.toNat))) else none := rfl
 @[simp] theorem evalMicroCBinOp_uint128_bshr (a b : Int) :
     evalMicroCBinOp_uint128 .bshr (.int a) (.int b) =
-    some (.int (wrapUInt128 (Int.shiftRight a (b.toNat % 128)))) := rfl
+    if 0 ≤ b ∧ b < 128 then some (.int (wrapUInt128 (Int.shiftRight a b.toNat))) else none := rfl
 
 @[simp] theorem evalMicroCUnaryOp_uint128_neg (n : Int) :
     evalMicroCUnaryOp_uint128 .neg (.int n) = some (.int (wrapUInt128 (-n))) := rfl
@@ -204,17 +206,17 @@ example :
           (.assign "x" (.binOp .bshl (.litInt 3) (.litInt 4)))
         pure (e "x")) = some (.int 48) := by native_decide
 
-/-- Shift modulus = % 128: shift by 127 works -/
+/-- Shift by 127 works -/
 example :
     (do let (_, e) ← evalMicroC_uint128 10 MicroCEnv.default
           (.assign "x" (.binOp .bshl (.litInt 1) (.litInt 127)))
         pure (e "x")) = some (.int (2^127)) := by native_decide
 
-/-- Shift modulus = % 128: shift by 128 wraps to shift by 0 -/
+/-- Shift by 128 is undefined: none -/
 example :
     (do let (_, e) ← evalMicroC_uint128 10 MicroCEnv.default
           (.assign "x" (.binOp .bshl (.litInt 1) (.litInt 128)))
-        pure (e "x")) = some (.int 1) := by native_decide
+        pure (e "x")) = none := by native_decide
 
 /-- Shift by 64 works correctly in uint128 (key for Goldilocks fold) -/
 example :

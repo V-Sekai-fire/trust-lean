@@ -88,5 +88,17 @@ jobs:
       - name: The proof that VarNameInjective is false stops compiling
         run: lake env lean --run scripts/CheckVacuity.lean
 
+      - name: Planted cast spellings and wrapping semantics fail the C differential harness
+        run: lake env lean --run scripts/CheckCDiff.lean --self-test
+
+      - name: Printed casts and operators compute what the evaluators say under clang and UBSan
+        run: lake env lean --run scripts/CheckCDiff.lean
+
+      - name: Planted cast spellings fail the Rust cast harness
+        run: lake env lean --run scripts/CheckRustCasts.lean --self-test
+
+      - name: Printed Rust casts compile under rustc and compute what the evaluators say
+        run: lake env lean --run scripts/CheckRustCasts.lean
+
       - name: Build Tests
         run: lake build Tests

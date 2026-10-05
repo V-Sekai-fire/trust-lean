@@ -17,7 +17,8 @@ namespace TrustLean
 
 /-- Evaluate a MicroC binary operator with UInt32 wrapping.
     Arithmetic results (add, sub, mul) are wrapped via wrapUInt32.
-    Bitwise results are wrapped via wrapUInt32.
+    Bitwise results are wrapped via wrapUInt32. A shift count outside `[0, 32)` is undefined
+    (C11 6.5.7p3) and gives `none`.
     Comparison and logical operations return Bool, unchanged. -/
 def evalMicroCBinOp_uint32 (op : MicroCBinOp) (v1 v2 : Value) : Option Value :=
   match op, v1, v2 with
@@ -31,8 +32,10 @@ def evalMicroCBinOp_uint32 (op : MicroCBinOp) (v1 v2 : Value) : Option Value :=
   | .band, .int a, .int b => some (.int (wrapUInt32 (Int.land a b)))
   | .bor, .int a, .int b => some (.int (wrapUInt32 (Int.lor a b)))
   | .bxor, .int a, .int b => some (.int (wrapUInt32 (Int.xor a b)))
-  | .bshl, .int a, .int b => some (.int (wrapUInt32 (Int.shiftLeft a (b.toNat % 64))))
-  | .bshr, .int a, .int b => some (.int (wrapUInt32 (Int.shiftRight a (b.toNat % 64))))
+  | .bshl, .int a, .int b =>
+    if 0 ≤ b ∧ b < 32 then some (.int (wrapUInt32 (Int.shiftLeft a b.toNat))) else none
+  | .bshr, .int a, .int b =>
+    if 0 ≤ b ∧ b < 32 then some (.int (wrapUInt32 (Int.shiftRight a b.toNat))) else none
   | _, _, _ => none
 
 /-- Evaluate a MicroC unary operator with UInt32 wrapping. -/
@@ -44,7 +47,8 @@ def evalMicroCUnaryOp_uint32 (op : MicroCUnaryOp) (v : Value) : Option Value :=
   | .trunc64to32, .int n => some (.int (wrapUInt32 (n % (2^32 : Int))))
   | _, _ => none
 
-/-- Evaluate a MicroC binary operator with UInt64 wrapping. -/
+/-- Evaluate a MicroC binary operator with UInt64 wrapping. A shift count outside `[0, 64)`
+    gives `none`. -/
 def evalMicroCBinOp_uint64 (op : MicroCBinOp) (v1 v2 : Value) : Option Value :=
   match op, v1, v2 with
   | .add, .int a, .int b => some (.int (addUInt64 a b))
@@ -57,8 +61,10 @@ def evalMicroCBinOp_uint64 (op : MicroCBinOp) (v1 v2 : Value) : Option Value :=
   | .band, .int a, .int b => some (.int (wrapUInt64 (Int.land a b)))
   | .bor, .int a, .int b => some (.int (wrapUInt64 (Int.lor a b)))
   | .bxor, .int a, .int b => some (.int (wrapUInt64 (Int.xor a b)))
-  | .bshl, .int a, .int b => some (.int (wrapUInt64 (Int.shiftLeft a (b.toNat % 64))))
-  | .bshr, .int a, .int b => some (.int (wrapUInt64 (Int.shiftRight a (b.toNat % 64))))
+  | .bshl, .int a, .int b =>
+    if 0 ≤ b ∧ b < 64 then some (.int (wrapUInt64 (Int.shiftLeft a b.toNat))) else none
+  | .bshr, .int a, .int b =>
+    if 0 ≤ b ∧ b < 64 then some (.int (wrapUInt64 (Int.shiftRight a b.toNat))) else none
   | _, _, _ => none
 
 /-- Evaluate a MicroC unary operator with UInt64 wrapping. -/
@@ -94,10 +100,18 @@ def evalMicroCUnaryOp_uint64 (op : MicroCUnaryOp) (v : Value) : Option Value :=
     evalMicroCBinOp_uint32 .bxor (.int a) (.int b) = some (.int (wrapUInt32 (Int.xor a b))) := rfl
 @[simp] theorem evalMicroCBinOp_uint32_bshl (a b : Int) :
     evalMicroCBinOp_uint32 .bshl (.int a) (.int b) =
-    some (.int (wrapUInt32 (Int.shiftLeft a (b.toNat % 64)))) := rfl
+    if 0 ≤ b ∧ b < 32 then some (.int (wrapUInt32 (Int.shiftLeft a b.toNat))) else none := rfl
 @[simp] theorem evalMicroCBinOp_uint32_bshr (a b : Int) :
     evalMicroCBinOp_uint32 .bshr (.int a) (.int b) =
-    some (.int (wrapUInt32 (Int.shiftRight a (b.toNat % 64)))) := rfl
+    if 0 ≤ b ∧ b < 32 then some (.int (wrapUInt32 (Int.shiftRight a b.toNat))) else none := rfl
+
+/-- `1u << 40` is undefined (C11 6.5.7p3): the count is not below the width of `uint32_t`. -/
+theorem evalMicroCBinOp_uint32_shl_1_40 :
+    evalMicroCBinOp_uint32 .bshl (.int 1) (.int 40) = none := by decide
+
+/-- A `uint64_t` shift by 64 is undefined. -/
+theorem evalMicroCBinOp_uint64_shl_64 :
+    evalMicroCBinOp_uint64 .bshl (.int 1) (.int 64) = none := by decide
 
 @[simp] theorem evalMicroCUnaryOp_uint32_neg (n : Int) :
     evalMicroCUnaryOp_uint32 .neg (.int n) = some (.int (wrapUInt32 (-n))) := rfl

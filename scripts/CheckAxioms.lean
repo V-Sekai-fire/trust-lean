@@ -20,7 +20,13 @@ def required : Array Name := #[
   `TrustLean.stmtToMicroC_correct, `TrustLean.stmtToMicroC_correct_withCalls,
   `TrustLean.stmtToMicroRust_correct, `TrustLean.stmtToMicroRust_correct_withCalls,
   `TrustLean.Bridge.expandedSigmaToStmt_correct, `TrustLean.Pipeline.sound,
-  `TrustLean.varNameToC_injective, `TrustLean.varNameToRust_injective]
+  `TrustLean.varNameToC_injective, `TrustLean.varNameToRust_injective,
+  `TrustLean.microCExprToString_trunc_3000000000, `TrustLean.microCExprToString_widen_neg5,
+  `TrustLean.microRustExprToString_trunc_3000000000, `TrustLean.microRustExprToString_widen_neg5,
+  `TrustLean.evalMicroCBinOp_int64_inRange, `TrustLean.evalMicroCUnaryOp_int64_inRange,
+  `TrustLean.evalMicroCBinOp_int64_refines, `TrustLean.evalMicroCUnaryOp_int64_refines,
+  `TrustLean.evalMicroCBinOp_int64_add_eq_some, `TrustLean.evalMicroCBinOp_int64_add_maxInt64_one,
+  `TrustLean.evalMicroCBinOp_uint32_shl_1_40]
 
 def isGateName (n : Name) : Bool :=
   match n with
