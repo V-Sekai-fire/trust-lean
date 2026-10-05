@@ -273,7 +273,7 @@ example : microRustBridge
     Both translations target the same MicroCStmt/MicroCExpr AST types.
     They differ only in the reserved identifiers that force an escape:
     - MicroRust: rustReservedIdentifiers (53 Rust keywords + prelude)
-    - MicroC: cReservedIdentifiers (C99/C11 keywords + stdint/stdlib)
+    - MicroC: cReservedIdentifiers (C99/C11 keywords + stdint/stdlib + header macros)
 
     For identifiers that are safe in both languages (e.g., "x", "arr", "i"),
     the AST output is identical. -/

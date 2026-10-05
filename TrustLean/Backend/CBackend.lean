@@ -6,11 +6,15 @@
   N9.2 (v1.2.0): Industrial upgrade — sanitized identifiers, autocontained headers,
   mandatory braces on all control flow. All 12 Stmt constructors handled.
   Based on LeanScribe's CBackend.lean, extended for Trust-Lean's full IR.
+  The BackendEmitter instance prints through stmtToMicroC and microCToString, whose output
+  the roundtrip theorems cover, after a declaration for every local.
 -/
 
 import TrustLean.Backend.Common
 import TrustLean.Core.Stmt
 import TrustLean.Typeclass.BackendEmitter
+import TrustLean.MicroC.Translation
+import TrustLean.MicroC.Typed
 
 set_option autoImplicit false
 
@@ -20,11 +24,15 @@ namespace TrustLean
 
 /-- Configuration for the C backend. -/
 structure CConfig where
-  /-- Use int64_t (true) or long long (false) for integers. -/
+  /-- int64_t (true) or long long (false) for the return type and the power helper. Locals print
+      as `printTyped` declares them, an integer as int64_t. -/
   useInt64 : Bool := true
   /-- Include power helper function in output. -/
   includePowerHelper : Bool := true
-  deriving Repr, Inhabited
+  deriving Repr
+
+/-- The field defaults. A derived instance would set both fields to `false`. -/
+instance : Inhabited CConfig := ⟨{}⟩
 
 /-- Integer type name based on config. -/
 def CConfig.intType (cfg : CConfig) : String :=
@@ -53,21 +61,6 @@ def unaryOpToC : UnaryOp → String
   | .lnot => "!"
   | .widen32to64 => "(int64_t)(uint32_t)"
   | .trunc64to32 => "(uint32_t)"
-
-/-! ## C-Safe Variable Names (N9.2) -/
-
-/-- Convert VarName to a C identifier string. Valid user names that are not C-reserved
-    and do not start with `tl_` print unchanged; temps print `tl_t<k>`; every other
-    user name prints `tl_u` and its escape; array elements print `base[idx]`. -/
-def varNameToC : VarName → String
-  | .user s => userIdent cReservedIdentifiers s
-  | .temp k => tempIdent k
-  | .array base idx => base ++ "[" ++ toString idx ++ "]"
-
-/-- Distinct variables print to distinct C identifiers. -/
-theorem varNameToC_injective : Function.Injective varNameToC :=
-  varNameIdent_injective cReservedIdentifiers varNameToC
-    (fun _ => rfl) (fun _ => rfl) (fun _ _ => rfl)
 
 /-! ## Expression Emission -/
 
@@ -152,29 +145,85 @@ def stmtToC (level : Nat) : Stmt → String
 private def buildParamList (params : List (String × String)) : String :=
   ", ".intercalate (params.map fun (n, t) => t ++ " " ++ varNameToC (.user n))
 
+/-- Variables a statement writes: the targets of assignments, loads and calls. -/
+def MicroCStmt.writtenVars : MicroCStmt → List String
+  | .assign x _ | .load x _ _ | .call x _ _ => [x]
+  | .seq s1 s2 | .ite _ s1 s2 => s1.writtenVars ++ s2.writtenVars
+  | .while_ _ b => b.writtenVars
+  | _ => []
+
+/-- The type of each write to `x` under `Γ`: an assignment's right side, and `none` for a right
+    side that does not type, a load or a call. -/
+def MicroCStmt.writeTys (Γ : CDecls) (x : String) : MicroCStmt → List (Option CType)
+  | .assign y e => if y = x then [(exprTy Γ e).map (·.1)] else []
+  | .load y _ _ | .call y _ _ => if y = x then [none] else []
+  | .seq s1 s2 | .ite _ s1 s2 => s1.writeTys Γ x ++ s2.writeTys Γ x
+  | .while_ _ b => b.writeTys Γ x
+  | _ => []
+
+/-- The type all writes share, else `int64_t`, which holds a `uint32_t` or `bool` unchanged. -/
+def commonTy : List (Option CType) → CType
+  | some t :: ts => if ts.all (· == some t) then t else .i64
+  | _ => .i64
+
+/-- Call names through `sanitizeIdentifier`, as `stmtToC` printed them. -/
+def MicroCStmt.sanitizeCalls : MicroCStmt → MicroCStmt
+  | .call r f args => .call r (sanitizeIdentifier f) args
+  | .seq s1 s2 => .seq s1.sanitizeCalls s2.sanitizeCalls
+  | .ite c t e => .ite c t.sanitizeCalls e.sanitizeCalls
+  | .while_ c b => .while_ c b.sanitizeCalls
+  | s => s
+
+/-- The type of a parameter, from the type name it is declared with. -/
+def paramCType (t : String) : Option CType :=
+  if t = "long long" then some .i64 else CType.ofName t
+
+/-- Declarations for the variables a body writes besides its parameters; a variable it only reads
+    stays undeclared, so a name no parameter has fails to compile. Passes from `int64_t` give each
+    local the type its writes share, then demotion passes turn to `int64_t` every local a write
+    under the final declarations does not match, so no write narrows a value. -/
+def localDecls (params : CDecls) (paramNames : List String) (body : MicroCStmt) : CDecls :=
+  let names := (body.writtenVars.filter fun x => isValidCIdent x && !paramNames.contains x).eraseDups
+  let rounds := fun (f : CDecls → CDecls) (Γ : CDecls) =>
+    (List.range (names.length + 1)).foldl (fun Γ _ => f Γ) Γ
+  let shared := rounds (fun Γ => names.map fun x => (x, commonTy (body.writeTys (params ++ Γ) x)))
+    (names.map (·, .i64))
+  rounds (fun Γ => Γ.map fun (x, t) =>
+    (x, if (body.writeTys (params ++ Γ) x).all (· == some t) then t else .i64)) shared
+
 /-- Generate a complete C function wrapping a statement body and return expression.
-    The function name is sanitized; parameter names print via varNameToC. -/
+    The body and the return print through `microCToString`, after a declaration for every
+    other variable the body writes. `(void)power;` marks the header's helper used, which clang's
+    `-Wunused-function` otherwise rejects in a function that does not call it. The function
+    name is sanitized; parameter names print via varNameToC. -/
 def generateCFunction (cfg : CConfig) (funcName : String)
     (params : List (String × String)) (body : Stmt) (result : LowLevelExpr) : String :=
   let safeName := sanitizeIdentifier funcName
   let signature := cfg.intType ++ " " ++ safeName ++ "(" ++ buildParamList params ++ ")"
-  let bodyStr := stmtToC 1 body
-  let returnStmt := "  return " ++ exprToC result ++ ";"
-  let inner := joinCode bodyStr returnStmt
-  signature ++ " {\n" ++ inner ++ "\n}"
+  let paramNames := params.map fun (n, _) => varNameToC (.user n)
+  let paramDecls := params.filterMap fun (n, t) => (paramCType t).map (varNameToC (.user n), ·)
+  let ms := (stmtToMicroC body).sanitizeCalls
+  signature ++ " {\n" ++ (if cfg.includePowerHelper then "(void)power;\n" else "") ++
+    printTyped (localDecls paramDecls paramNames ms) ms ++ "\n" ++
+    microCToString (.return_ (some (exprToMicroC result))) ++ "\n}"
 
-/-- Generate C preamble with necessary includes.
-    Autocontained: includes stdint.h (int64_t), stdbool.h (bool), stdlib.h (general). -/
+/-- Generate C preamble with necessary includes and the assertions the typed subset relies on:
+    `uint32_t` arithmetic does not promote to `int`, and `nu` is a `uint32_t` value.
+    The power helper squares `base` only while a higher exponent bit remains, so it overflows
+    only when the result does. -/
 def generateCHeader (cfg : CConfig) : String :=
-  let base := "#include <stdint.h>\n#include <stdbool.h>\n#include <stdlib.h>"
+  let base := "#include <stdint.h>\n#include <stdbool.h>\n#include <stdlib.h>\n#include <limits.h>\n\n" ++
+    "_Static_assert(INT_MAX < UINT32_MAX, \"uint32_t does not promote to int (C11 6.3.1.1p2)\");\n" ++
+    "_Static_assert(sizeof(unsigned) == 4 && UINT_MAX == UINT32_MAX, " ++
+    "\"a u-suffixed literal below 2^32 is a 32-bit unsigned int (C11 6.4.4.1p5)\");"
   if cfg.includePowerHelper then
     base ++ "\n\n" ++
     "static " ++ cfg.intType ++ " power(" ++ cfg.intType ++ " base, unsigned int exp) {\n" ++
     "  " ++ cfg.intType ++ " result = 1;\n" ++
     "  while (exp > 0) {\n" ++
     "    if (exp % 2 == 1) result *= base;\n" ++
-    "    base *= base;\n" ++
     "    exp /= 2;\n" ++
+    "    if (exp > 0) base *= base;\n" ++
     "  }\n" ++
     "  return result;\n" ++
     "}"
@@ -182,10 +231,10 @@ def generateCHeader (cfg : CConfig) : String :=
 
 /-! ## BackendEmitter Instance -/
 
-/-- C backend implements BackendEmitter. -/
+/-- C backend implements BackendEmitter through the printer the roundtrip theorems cover. -/
 instance : BackendEmitter CConfig where
   name := "C"
-  emitStmt _cfg level stmt := stmtToC level stmt
+  emitStmt _cfg level stmt := indentStr level ++ microCToString (stmtToMicroC stmt).sanitizeCalls
   emitFunction cfg name params body result := generateCFunction cfg name params body result
   emitHeader cfg := generateCHeader cfg
 

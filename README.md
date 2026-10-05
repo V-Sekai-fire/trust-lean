@@ -88,6 +88,10 @@ lake env lean --run scripts/CheckAxioms.lean
 # Fail unless the proof that VarNameInjective is false stops compiling
 lake env lean --run scripts/CheckVacuity.lean
 
+# Fail unless every emitted C program compiles under clang -std=c11 -Wall -Werror -fsanitize=undefined
+# and every typed program computes what evalTyped says
+lake env lean --run scripts/CheckTypedC.lean
+
 # Run integration tests
 lake env lean TrustLean/Tests/Integration.lean
 ```
@@ -95,6 +99,16 @@ lake env lean TrustLean/Tests/Integration.lean
 Requires Lean 4 toolchain and Mathlib.
 
 ## Examples
+
+### Minimal export: from Lean to a running C program
+
+`examples/Export.lean` writes `sum_squares` (1² + … + n²) to `examples/out/sum_squares.c`, builds it
+with `examples/driver.c` under `cc -std=c11 -Wall -Werror`, and fails unless it prints what
+`ImpStmt.eval` computes for n = 100.
+
+```bash
+lake build && lake env lean --run examples/Export.lean
+```
 
 ### ArithExpr: Compile and verify
 
@@ -130,17 +144,26 @@ def sumProgram : ImpStmt :=
 ### C Backend: Generate verified C code
 
 ```lean
--- Generate C function from a Stmt
-def cCode := generateCFunction defaultCConfig "compute"
+-- Generate C function from a Stmt and a result expression
+def cCode := generateCFunction { includePowerHelper := false } "compute"
   [("x", "int64_t"), ("y", "int64_t")]
-  "int64_t"
   (.assign (.user "result") (.binOp .add (.varRef (.user "x")) (.varRef (.user "y"))))
+  (.varRef (.user "result"))
 
 -- Produces:
 -- int64_t compute(int64_t x, int64_t y) {
---   result = (x + y);
+-- int64_t result = 0; (void)result;
+-- { result = (x + y); }
+-- return result;
 -- }
 ```
+
+The body and the return print through `microCToString`, which `master_roundtrip` covers, after
+`printTyped`'s declarations. Each variable the body writes, other than a parameter, is declared
+with the type all its writes share, or `int64_t` when they differ; a variable the body only reads
+must be a parameter. A typed program (`MicroC/Typed.lean`) declares `uint32_t`, `int64_t` and
+`bool` variables; `master_typed_roundtrip` parses its printed form back, and `evalTyped` is its
+semantics, equal to `evalMicroC_uint32` on the `uint32_t` subset.
 
 ## Performance
 

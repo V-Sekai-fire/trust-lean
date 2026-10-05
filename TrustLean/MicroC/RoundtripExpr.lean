@@ -24,7 +24,7 @@ namespace TrustLean
 
 /-- Expression depth: minimum fuel for pExprF to parse the expression. -/
 def exprDepth : MicroCExpr → Nat
-  | .litInt _ | .litBool _ | .varRef _ => 1
+  | .litInt _ | .litU32 _ | .litBool _ | .varRef _ => 1
   | .binOp _ l r => 1 + max (exprDepth l) (exprDepth r)
   | .unaryOp _ e => 1 + exprDepth e
   | .powCall base _ => 1 + exprDepth base
@@ -33,12 +33,12 @@ def exprDepth : MicroCExpr → Nat
 theorem exprDepth_pos (e : MicroCExpr) : exprDepth e ≥ 1 := by
   cases e <;> simp [exprDepth] <;> omega
 
-/-- Disambiguation predicate: no neg(litInt n) with n ≥ 0 in any sub-expression.
-    Such expressions are ambiguous: "(-5)" parses as litInt(-5), not neg(litInt 5). -/
+/-- Disambiguation predicate: no neg(litInt n) with n ≥ 0 and no neg(litU32 n) in any
+    sub-expression. "(-5)" parses as litInt(-5), not neg(litInt 5), and "(-5u)" does not parse. -/
 def NegLitDisam : MicroCExpr → Prop
-  | .litInt _ | .litBool _ | .varRef _ => True
+  | .litInt _ | .litU32 _ | .litBool _ | .varRef _ => True
   | .binOp _ l r => NegLitDisam l ∧ NegLitDisam r
-  | .unaryOp .neg e => (∀ n : Int, n ≥ 0 → e ≠ .litInt n) ∧ NegLitDisam e
+  | .unaryOp .neg e => (∀ n : Int, n ≥ 0 → e ≠ .litInt n) ∧ (∀ n, e ≠ .litU32 n) ∧ NegLitDisam e
   | .unaryOp .lnot e => NegLitDisam e
   | .unaryOp .widen32to64 e => NegLitDisam e
   | .unaryOp .trunc64to32 e => NegLitDisam e
@@ -168,7 +168,7 @@ theorem pBinOp_roundtrip (op : MicroCBinOp) (c : Char) (cs : List Char)
 /-! ## Helper: ExprSafe for binOp middle rest -/
 
 /-- ExprSafe for the "rest after printing lhs" in a binOp context. -/
-private theorem exprSafe_binop_mid (op : MicroCBinOp)
+theorem exprSafe_binop_mid (op : MicroCBinOp)
     (rhs_print : List Char) (rest : List Char) :
     ExprSafe (' ' :: (microCBinOpToString op).toList ++
       (' ' :: rhs_print ++ (')' :: rest))) := by
@@ -318,7 +318,7 @@ private theorem isDigit_not_ws' (c : Char) (h : c.isDigit = true) :
     (hd : c.isDigit = true) :
     pExprF (k + 1) (c :: cs) =
       match pNat (c :: cs) with
-      | some (n, rest) => some (.litInt (Int.ofNat n), rest)
+      | some (n, rest) => litOfDigits n rest
       | none => none := by
   simp only [pExprF]
   rw [skipWs_nonws c cs (isDigit_not_ws' c hd)]
@@ -333,6 +333,31 @@ private theorem isDigit_not_ws' (c : Char) (h : c.isDigit = true) :
     next => rfl
     next hf => exact absurd hd hf
   · rename_i heq; simp at heq
+
+/-- Digits not followed by an identifier character are an `int` literal. -/
+private theorem litOfDigits_of_noLeadingIdent (n : Nat) (rest : List Char)
+    (h : NoLeadingIdent rest) : litOfDigits n rest = some (.litInt (Int.ofNat n), rest) := by
+  rcases h with rfl | ⟨c, r, rfl, hca, _, _⟩
+  · rfl
+  · by_cases hcu : c = 'u'
+    · subst hcu; simp at hca
+    · unfold litOfDigits; split
+      · rename_i heq; exact absurd (List.cons.inj heq).1 hcu
+      · rfl
+
+@[simp] private theorem print_litU32_toList (n : UInt32) :
+    (microCExprToString (.litU32 n)).toList = natToChars n.toNat ++ ['u'] := by
+  simp [microCExprToString_litU32, String.toList_append, String.toList_ofList]
+
+theorem print_litU32_head (n : UInt32) (c : Char) (cs : List Char)
+    (h : (microCExprToString (.litU32 n)).toList = c :: cs) : c.isDigit = true := by
+  rw [print_litU32_toList] at h
+  have hne := natToChars_ne_nil n.toNat
+  match hcs : natToChars n.toNat with
+  | [] => exact absurd hcs hne
+  | c' :: _ =>
+    rw [hcs] at h; simp at h; rw [← h.1]
+    exact natToChars_all_digits n.toNat c' (by rw [hcs]; exact List.mem_cons_self ..)
 
 /-- pParenF '-' followed by digit: parse negative literal. -/
 private theorem pParenF_neg_digit (k : Nat) (c : Char) (rest : List Char)
@@ -403,6 +428,7 @@ theorem print_ne_nil (e : MicroCExpr) (he : WFExpr e) :
     · simp [String.toList_append]
     · have := natToChars_ne_nil n.toNat
       intro h; simp [String.toList_ofList] at h; exact this h
+  | litU32 n => simp
   | litBool b =>
     cases b <;> simp [microCExprToString]
   | varRef name hne _ _ _ =>
@@ -439,6 +465,10 @@ private theorem print_first_not_neg_bang (e : MicroCExpr) (he : WFExpr e) :
         have hd := natToChars_all_digits n.toNat c' (by rw [hcs]; exact List.mem_cons_self ..)
         exact ⟨by intro h; subst h; simp [Char.isDigit] at hd,
                by intro h; subst h; simp [Char.isDigit] at hd⟩
+  | litU32 n =>
+    have hd := print_litU32_head n c cs heq
+    exact ⟨by intro h; subst h; simp [Char.isDigit] at hd,
+           by intro h; subst h; simp [Char.isDigit] at hd⟩
   | litBool b =>
     cases b <;> simp [microCExprToString] at heq <;> obtain ⟨rfl, _⟩ := heq <;>
       exact ⟨by decide, by decide⟩
@@ -500,6 +530,7 @@ theorem print_first_nonws (e : MicroCExpr) (he : WFExpr e) :
       | c' :: _ =>
         simp [hcs] at heq; rw [← heq.1]
         exact isDigit_not_ws c' (natToChars_all_digits n.toNat c' (by rw [hcs]; exact List.mem_cons_self ..))
+  | litU32 n => exact isDigit_not_ws c (print_litU32_head n c cs heq)
   | litBool b =>
     cases b <;> simp [microCExprToString] at heq <;> obtain ⟨rfl, _⟩ := heq <;>
       exact ⟨by decide, by decide, by decide, by decide⟩
@@ -612,6 +643,14 @@ theorem print_not_keyword (e : MicroCExpr) (he : WFExpr e) (c0 : Char) (hc0 : c0
         have hd := natToChars_all_digits n.toNat c' (by rw [hcs]; exact List.mem_cons_self ..)
         simp only [String.toList_ofList, List.cons_append, ne_eq, List.cons.injEq, not_and]
         intro h; subst h; rw [isAlpha_not_isDigit c' hc0] at hd; exact absurd hd (by decide)
+  | litU32 n =>
+    intro h
+    match hcs : (microCExprToString (.litU32 n)).toList with
+    | [] => simp at hcs
+    | c' :: _ =>
+      have hd := print_litU32_head n c' _ hcs
+      rw [hcs] at h; simp only [List.cons_append, List.cons.injEq] at h
+      rw [h.1, isAlpha_not_isDigit c0 hc0] at hd; exact absurd hd (by decide)
   | litBool b =>
     cases b
     · exact idrun_ne ['f', 'a', 'l', 's', 'e'] ' ' t _ r (by decide) hsp hnp
@@ -664,6 +703,14 @@ theorem print_not_cast (e : MicroCExpr) (he : WFExpr e) (c0 : Char) (hc0 : c0.is
         have hd := natToChars_all_digits n.toNat c' (by rw [hcs]; exact List.mem_cons_self ..)
         simp only [String.toList_ofList, List.cons_append, ne_eq, List.cons.injEq, not_and]
         intro h; subst h; simp [Char.isDigit] at hd
+  | litU32 n =>
+    intro h
+    match hcs : (microCExprToString (.litU32 n)).toList with
+    | [] => simp at hcs
+    | c' :: _ =>
+      have hd := print_litU32_head n c' _ hcs
+      rw [hcs] at h; simp only [List.cons_append, List.cons.injEq] at h
+      rw [h.1] at hd; simp [Char.isDigit] at hd
   | litBool b => cases b <;> simp [microCExprToString]
   | varRef name _ _ hcont _ =>
     rw [hkw]
@@ -747,8 +794,24 @@ theorem expr_roundtrip_with_rest (e : MicroCExpr) (he : WFExpr e) (hs : NegLitDi
         rw [show c :: (cs ++ rest) = natToChars n.toNat ++ rest from by rw [hcs, List.cons_append]]
         rw [pNat_natToChars n.toNat rest hrest.1]
         simp only []
+        rw [litOfDigits_of_noLeadingIdent _ _ hrest.2.1]
         congr 1; congr 1; congr 1
         exact Int.toNat_of_nonneg (Int.not_lt.mp hn)
+  | litU32 n =>
+    have hfne : fuel ≠ 0 := by simp [exprDepth] at hfuel; omega
+    obtain ⟨k, rfl⟩ := Nat.exists_eq_succ_of_ne_zero hfne
+    rw [print_litU32_toList]
+    have hne := natToChars_ne_nil n.toNat
+    match hcs : natToChars n.toNat with
+    | [] => exact absurd hcs hne
+    | c :: cs =>
+      have hcd := natToChars_all_digits n.toNat c (by rw [hcs]; exact List.mem_cons_self ..)
+      simp only [List.cons_append, List.append_assoc, List.nil_append]
+      rw [pExprF_digit k c _ hcd]
+      rw [show c :: (cs ++ 'u' :: rest) = natToChars n.toNat ++ 'u' :: rest from by
+        rw [hcs, List.cons_append]]
+      rw [pNat_natToChars n.toNat ('u' :: rest) (Or.inr ⟨'u', rest, rfl, by decide⟩)]
+      simp [litOfDigits, n.toNat_lt, UInt32.ofNat_toNat]
   | litBool b =>
     have h1 : fuel ≥ 1 := Nat.le_trans (exprDepth_pos (.litBool b)) hfuel
     have hfne : fuel ≠ 0 := by omega
@@ -1009,7 +1072,7 @@ theorem expr_roundtrip_with_rest (e : MicroCExpr) (he : WFExpr e) (hs : NegLitDi
       simp [skipWs]
     | neg =>
       -- NegLitDisam gives (∀ n, n ≥ 0 → e ≠ .litInt n) ∧ NegLitDisam e
-      have ⟨h_not_lit, hs_e⟩ := hs
+      have ⟨h_not_lit, h_not_u32, hs_e⟩ := hs
       -- print = "(-" ++ print(e) ++ ")"
       simp only [microCExprToString_unaryOp, microCUnaryOpToString, String.toList_append,
         List.append_assoc, str_lp, str_rp, str_dash, List.cons_append, List.nil_append]
@@ -1043,6 +1106,7 @@ theorem expr_roundtrip_with_rest (e : MicroCExpr) (he : WFExpr e) (hs : NegLitDi
                 simp [Char.isDigit] at hd
               · -- n ≥ 0: digit OK, contradicts h_not_lit
                 exact absurd rfl (h_not_lit n (by omega))
+            | litU32 m => exact absurd rfl (h_not_u32 m)
             | litBool b =>
               cases b <;> simp [microCExprToString] at h_head_e <;>
                 obtain ⟨rfl, _⟩ := h_head_e <;> simp [Char.isDigit] at hd <;>
@@ -1225,7 +1289,7 @@ theorem expr_roundtrip_with_rest (e : MicroCExpr) (he : WFExpr e) (hs : NegLitDi
 theorem exprDepth_le_length (e : MicroCExpr) (he : WFExpr e) :
     exprDepth e ≤ (microCExprToString e).toList.length + 1 := by
   induction he with
-  | litInt _ | litBool _ | varRef _ _ _ _ _ =>
+  | litInt _ | litU32 _ | litBool _ | varRef _ _ _ _ _ =>
     simp [exprDepth]
   | binOp _ _ _ _ _ ih_l ih_r =>
     simp only [exprDepth, microCExprToString_binOp, Nat.max_def]

@@ -13,6 +13,7 @@
 
 import TrustLean.MicroC.Simulation
 import TrustLean.MicroC.Roundtrip
+import TrustLean.Backend.CBackend
 
 set_option autoImplicit false
 

@@ -68,8 +68,31 @@ def cReservedExtra : List String :=
    "size_t", "ptrdiff_t", "bool", "true", "false",
    "NULL", "main", "printf", "malloc", "free", "exit", "abort"]
 
-/-- All C reserved identifiers (C99 keywords + C11 + stdint.h + stdlib). -/
-def cReservedIdentifiers : List String := c99Keywords ++ cReservedExtra
+/-- The macros C11 defines in the headers `generateCHeader` includes, other than `bool`, `true`,
+    `false` and `NULL` in `cReservedExtra`: limits.h (5.2.4.2.1), stdint.h (7.20.2-7.20.4),
+    stdbool.h (7.18) and stdlib.h (7.22). A parameter or local with one of these names would
+    expand. -/
+def cHeaderMacros : List String :=
+  ["CHAR_BIT", "SCHAR_MIN", "SCHAR_MAX", "UCHAR_MAX", "CHAR_MIN", "CHAR_MAX", "MB_LEN_MAX",
+   "SHRT_MIN", "SHRT_MAX", "USHRT_MAX", "INT_MIN", "INT_MAX", "UINT_MAX",
+   "LONG_MIN", "LONG_MAX", "ULONG_MAX", "LLONG_MIN", "LLONG_MAX", "ULLONG_MAX",
+   "INT8_MIN", "INT16_MIN", "INT32_MIN", "INT64_MIN", "INT8_MAX", "INT16_MAX", "INT32_MAX",
+   "INT64_MAX", "UINT8_MAX", "UINT16_MAX", "UINT32_MAX", "UINT64_MAX",
+   "INT_LEAST8_MIN", "INT_LEAST16_MIN", "INT_LEAST32_MIN", "INT_LEAST64_MIN",
+   "INT_LEAST8_MAX", "INT_LEAST16_MAX", "INT_LEAST32_MAX", "INT_LEAST64_MAX",
+   "UINT_LEAST8_MAX", "UINT_LEAST16_MAX", "UINT_LEAST32_MAX", "UINT_LEAST64_MAX",
+   "INT_FAST8_MIN", "INT_FAST16_MIN", "INT_FAST32_MIN", "INT_FAST64_MIN",
+   "INT_FAST8_MAX", "INT_FAST16_MAX", "INT_FAST32_MAX", "INT_FAST64_MAX",
+   "UINT_FAST8_MAX", "UINT_FAST16_MAX", "UINT_FAST32_MAX", "UINT_FAST64_MAX",
+   "INTPTR_MIN", "INTPTR_MAX", "UINTPTR_MAX", "INTMAX_MIN", "INTMAX_MAX", "UINTMAX_MAX",
+   "PTRDIFF_MIN", "PTRDIFF_MAX", "SIG_ATOMIC_MIN", "SIG_ATOMIC_MAX", "SIZE_MAX",
+   "WCHAR_MIN", "WCHAR_MAX", "WINT_MIN", "WINT_MAX",
+   "INT8_C", "INT16_C", "INT32_C", "INT64_C", "UINT8_C", "UINT16_C", "UINT32_C", "UINT64_C",
+   "INTMAX_C", "UINTMAX_C", "__bool_true_false_are_defined",
+   "EXIT_FAILURE", "EXIT_SUCCESS", "RAND_MAX", "MB_CUR_MAX"]
+
+/-- All C reserved identifiers (C99 keywords + C11 + stdint.h + stdlib + the headers' macros). -/
+def cReservedIdentifiers : List String := c99Keywords ++ (cReservedExtra ++ cHeaderMacros)
 
 /-- Check if a character is valid in a C identifier (letter, digit, or underscore). -/
 def isValidCIdentChar (c : Char) : Bool :=
@@ -103,6 +126,7 @@ def sanitizeIdentifier (s : String) : String :=
 private theorem c99_no_tl_prefix :
     ∀ k ∈ c99Keywords, k.toList.take 3 ≠ ['t', 'l', '_'] := by decide
 
+set_option maxRecDepth 2048 in
 /-- No reserved identifier's character list starts with "tl_". -/
 private theorem reserved_no_tl_prefix :
     ∀ k ∈ cReservedIdentifiers, k.toList.take 3 ≠ ['t', 'l', '_'] := by decide
@@ -733,5 +757,20 @@ theorem sanitizeIdentifierRust_idempotent (s : String) :
       rw [heq_r] at hmem; exact hnotres hmem
     simp only [hnotdigit, hnotresOL]
     exact heq_r
+
+/-! ## C-Safe Variable Names (N9.2) -/
+
+/-- Convert VarName to a C identifier string. Valid user names that are not C-reserved
+    and do not start with `tl_` print unchanged; temps print `tl_t<k>`; every other
+    user name prints `tl_u` and its escape; array elements print `base[idx]`. -/
+def varNameToC : VarName → String
+  | .user s => userIdent cReservedIdentifiers s
+  | .temp k => tempIdent k
+  | .array base idx => base ++ "[" ++ toString idx ++ "]"
+
+/-- Distinct variables print to distinct C identifiers. -/
+theorem varNameToC_injective : Function.Injective varNameToC :=
+  varNameIdent_injective cReservedIdentifiers varNameToC
+    (fun _ => rfl) (fun _ => rfl) (fun _ _ => rfl)
 
 end TrustLean

@@ -205,6 +205,7 @@ example : neonBinOpIntrinsic .add = "vaddq_u32" := by rfl
 /-- Intrinsic table: AVX2 mul. -/
 example : avx2BinOpIntrinsic .mul = "_mm256_mullo_epi32" := by rfl
 
+set_option maxRecDepth 2048 in
 /-- Scalar config emits non-empty string. -/
 example : (vecStmtToC (VecConfig.scalar 4) 0
     (.vecMap 4 ["a"] (.assign (.user "a") (.litInt 42)))).length > 0 := by decide

@@ -276,6 +276,7 @@ theorem pNat_natToChars (n : Nat) (rest : List Char) (hrest : NoLeadingDigit res
     array access bases are varRefs. -/
 inductive WFExpr : MicroCExpr → Prop
   | litInt (n : Int) : WFExpr (.litInt n)
+  | litU32 (n : UInt32) : WFExpr (.litU32 n)
   | litBool (b : Bool) : WFExpr (.litBool b)
   | varRef (name : String) (hne : name ≠ "")
     (hstart : let c := name.toList.head (by simp; exact hne)

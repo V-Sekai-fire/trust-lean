@@ -89,6 +89,7 @@ def microCExprToString : MicroCExpr → String
   | .litInt n =>
     if n < 0 then "(" ++ "-" ++ String.ofList (natToChars n.natAbs) ++ ")"
     else String.ofList (natToChars n.toNat)
+  | .litU32 n => String.ofList (natToChars n.toNat) ++ "u"
   | .litBool true => "true"
   | .litBool false => "false"
   | .varRef name => name
@@ -109,6 +110,9 @@ def microCExprToString : MicroCExpr → String
     microCExprToString (.litInt n) =
       if n < 0 then "(" ++ "-" ++ String.ofList (natToChars n.natAbs) ++ ")"
       else String.ofList (natToChars n.toNat) := rfl
+
+@[simp] theorem microCExprToString_litU32 (n : UInt32) :
+    microCExprToString (.litU32 n) = String.ofList (natToChars n.toNat) ++ "u" := rfl
 
 @[simp] theorem microCExprToString_litBool_true :
     microCExprToString (.litBool true) = "true" := rfl
@@ -169,6 +173,12 @@ def joinArgs : List String → String
 
 /-! ## Statement Pretty-Printer -/
 
+/-- An `if` or `while` condition with its parentheses. A binary operation prints its own pair,
+    since clang's `-Wparentheses-equality` rejects `if ((a == b))`. -/
+def microCCondToString : MicroCExpr → String
+  | .binOp op lhs rhs => microCExprToString (.binOp op lhs rhs)
+  | e => "(" ++ microCExprToString e ++ ")"
+
 /-- Convert a MicroCStmt to canonical C source code (flat form, no indentation).
     Mandatory braces on all control flow. Semicolons on leaf statements. -/
 def microCToString : MicroCStmt → String
@@ -190,11 +200,11 @@ def microCToString : MicroCStmt → String
   | .seq s1 s2 =>
     microCToString s1 ++ " " ++ microCToString s2
   | .ite cond thenB elseB =>
-    "if (" ++ microCExprToString cond ++ ") { " ++
+    "if " ++ microCCondToString cond ++ " { " ++
       microCToString thenB ++ " } else { " ++
       microCToString elseB ++ " }"
   | .while_ cond body =>
-    "while (" ++ microCExprToString cond ++ ") { " ++
+    "while " ++ microCCondToString cond ++ " { " ++
       microCToString body ++ " }"
 
 /-! ## microCToString @[simp] Equation Lemmas -/
@@ -239,13 +249,13 @@ def microCToString : MicroCStmt → String
 
 @[simp] theorem microCToString_ite (cond : MicroCExpr) (thenB elseB : MicroCStmt) :
     microCToString (.ite cond thenB elseB) =
-      "if (" ++ microCExprToString cond ++ ") { " ++
+      "if " ++ microCCondToString cond ++ " { " ++
         microCToString thenB ++ " } else { " ++
         microCToString elseB ++ " }" := rfl
 
 @[simp] theorem microCToString_while (cond : MicroCExpr) (body : MicroCStmt) :
     microCToString (.while_ cond body) =
-      "while (" ++ microCExprToString cond ++ ") { " ++
+      "while " ++ microCCondToString cond ++ " { " ++
         microCToString body ++ " }" := rfl
 
 /-! ## Basic Properties -/
