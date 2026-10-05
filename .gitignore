@@ -2,6 +2,9 @@
 .lake/
 lake-packages/
 
+# Written by examples/Export.lean
+examples/out/
+
 # OS files
 .DS_Store
 

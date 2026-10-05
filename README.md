@@ -100,6 +100,16 @@ Requires Lean 4 toolchain and Mathlib.
 
 ## Examples
 
+### Minimal export: from Lean to a running C program
+
+`examples/Export.lean` writes `sum_squares` (1² + … + n²) to `examples/out/sum_squares.c`, builds it
+with `examples/driver.c` under `cc -std=c11 -Wall -Werror`, and fails unless it prints what
+`ImpStmt.eval` computes for n = 100.
+
+```bash
+lake build && lake env lean --run examples/Export.lean
+```
+
 ### ArithExpr: Compile and verify
 
 ```lean
