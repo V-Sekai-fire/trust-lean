@@ -40,7 +40,7 @@ example : sanitizeIdentifier "while" ∉ c99Keywords := by decide
 example : sanitizeIdentifier "int" ∉ c99Keywords := by decide
 example : sanitizeIdentifier "for" ∉ c99Keywords := by decide
 
-#eval do
+#eval show IO Unit from do
   -- Exhaustive check: no keyword survives varNameToC
   let keywords := c99Keywords ++ cReservedExtra
   let mut failures := #[]
@@ -62,7 +62,7 @@ example : isValidCIdent (varNameToC (.user "2x")) = true := by decide
 example : isValidCIdent (varNameToC (.user "a-b")) = true := by decide
 example : isValidCIdent (varNameToC (.user "hello")) = true := by decide
 
-#eval do
+#eval show IO Unit from do
   let inputs := ["while", "for", "int", "2bad", "", "a-b", "tl_x", "_x",
                   "main", "void", "!@#$%^", "v*o*i*d", "my_variable_name"]
   let mut failures := #[]
@@ -81,7 +81,7 @@ example : sanitizeIdentifier (sanitizeIdentifier "while") = sanitizeIdentifier "
 example : sanitizeIdentifier (sanitizeIdentifier "int") = sanitizeIdentifier "int" := by decide
 example : sanitizeIdentifier (sanitizeIdentifier "hello") = sanitizeIdentifier "hello" := by decide
 
-#eval do
+#eval show IO Unit from do
   let inputs := ["while", "for", "int", "2bad", "", "a-b", "tl_x", "_x", "main",
                   "void", "!@#$%^", "v*o*i*d", "my_variable_name"]
   let mut failures := #[]
@@ -115,7 +115,7 @@ example : countChar '{' (stmtToC 0 (.for_ .skip (.litBool true) .skip .skip))
 example : countChar '{' (stmtToC 0 (.while (.litBool true) (.ite (.litBool false) .break_ .continue_)))
     = countChar '}' (stmtToC 0 (.while (.litBool true) (.ite (.litBool false) .break_ .continue_))) := by decide
 
-#eval do
+#eval show IO Unit from do
   -- Test balanced braces on a broader set of statements
   let stmts : List Stmt := [
     .skip,
@@ -155,7 +155,7 @@ example : exprToC (.litInt 42) = "42" := by decide
 example : exprToC (.litBool true) = "1" := by decide
 example : exprToC (.litBool false) = "0" := by decide
 
-#eval do
+#eval show IO Unit from do
   let tests : List (Int × String) := [
     (0, "0"), (1, "1"), (42, "42"), (100, "100"),
     (-1, "(-1)"), (-42, "(-42)"), (-100, "(-100)")
@@ -172,7 +172,7 @@ example : exprToC (.litBool false) = "0" := by decide
 
 /-! ## P6 — P2 INVARIANT: generateCFunction produces non-empty string -/
 
-#eval do
+#eval show IO Unit from do
   let cfg := CConfig.mk true true
   let tests := [
     ("f", [("x", "int64_t")], Stmt.assign (.user "x") (.litInt 1)),

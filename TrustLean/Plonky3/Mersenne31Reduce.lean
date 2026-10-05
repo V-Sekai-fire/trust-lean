@@ -84,22 +84,23 @@ def mersenne31_reduce_spec (x : Nat) : Nat :=
 /-- The Mersenne identity: 2^31 ≡ 1 (mod 2^31 - 1). -/
 theorem mersenne31_two_pow_mod : 2^31 % (2^31 - 1) = 1 := by native_decide
 
-/-- The mathematical specification is correct: for x < 2^62,
+/-- The mathematical specification is correct: for x < 2^62 - 1,
     mersenne31_reduce_spec x = x % P.
 
     Proof idea: x = lo + hi * 2^31 where lo = x % 2^31, hi = x / 2^31.
     Since 2^31 ≡ 1 (mod P), we have x ≡ lo + hi (mod P).
-    For x < 2^62: lo < 2^31 and hi < 2^31, so sum < 2^32.
-    One conditional subtract produces the canonical representative. -/
-theorem mersenne31_reduce_spec_correct (x : Nat) (hx : x < 2^62) :
+    For x < 2^62 - 1: lo + hi < 2P, so one conditional subtract
+    produces the canonical representative. -/
+theorem mersenne31_reduce_spec_correct (x : Nat) (hx : x < 2^62 - 1) :
     mersenne31_reduce_spec x = x % (2^31 - 1) := by
   unfold mersenne31_reduce_spec
   -- The proof uses the division algorithm: x = lo + hi * 2^31
   -- and the Mersenne property: 2^31 ≡ 1 (mod P)
-  -- For x < 2^62, lo < 2^31 and hi < 2^31, so lo + hi < 2^32 < 2 * P
+  -- For x < 2^62 - 1, lo + hi < 2 * P
   -- After conditional subtract, result ∈ [0, P)
   -- We verify by computation for all relevant bounds:
-  omega
+  simp only []
+  split <;> omega
 
 /-- The spec matches the MicroC program for concrete values (bridge). -/
 example : mersenne31_reduce_spec 0 = 0 := by native_decide
@@ -178,5 +179,9 @@ example : (2^31 : Int) % (2^31 - 1 : Int) = 1 := by native_decide
 
 /-- P = 2^31 - 1 is the Mersenne31 prime -/
 example : mersenne31_P = 2147483647 := by native_decide
+
+/-- Negative control: at x = 2^62 - 1 the single conditional subtract leaves P,
+    so the bound in `mersenne31_reduce_spec_correct` cannot be relaxed to 2^62. -/
+example : mersenne31_reduce_spec (2^62 - 1) ≠ (2^62 - 1) % (2^31 - 1) := by decide
 
 end TrustLean

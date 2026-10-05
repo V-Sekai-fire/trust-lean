@@ -40,7 +40,7 @@ example : countChar '{' (stmtToC 0 (.seq (.ite (.litBool true) .skip .skip)
     (.while (.litBool false) (.assign (.user "x") (.litInt 0))))) := by decide
 
 -- #eval wide coverage
-#eval do
+#eval show IO Unit from do
   let stmts : List Stmt := [
     .skip,
     .break_,
@@ -88,7 +88,7 @@ example : isValidCIdent (sanitizeIdentifier "2x") = true := by decide
 example : isValidCIdent (sanitizeIdentifier "a-b") = true := by decide
 example : isValidCIdent (sanitizeIdentifier "tl_x") = true := by decide
 
-#eval do
+#eval show IO Unit from do
   let inputs := c99Keywords ++ cReservedExtra ++
     ["", "2x", "3abc", "!@#", "0", "a-b", "hello", "tl_x", "_x", "v*o*i*d"]
   let mut failures := #[]
@@ -108,7 +108,7 @@ example : sanitizeIdentifier "while" ∉ c99Keywords := by decide
 example : sanitizeIdentifier "int" ∉ c99Keywords := by decide
 example : sanitizeIdentifier "void" ∉ c99Keywords := by decide
 
-#eval do
+#eval show IO Unit from do
   let inputs := c99Keywords ++ cReservedExtra ++
     ["", "2x", "3abc", "!@#", "0", "a-b", "hello", "tl_x"]
   let keywords := c99Keywords ++ cReservedExtra
@@ -129,7 +129,7 @@ example : sanitizeIdentifier (sanitizeIdentifier "") = sanitizeIdentifier "" := 
 example : sanitizeIdentifier (sanitizeIdentifier "2x") = sanitizeIdentifier "2x" := by decide
 example : sanitizeIdentifier (sanitizeIdentifier "a-b") = sanitizeIdentifier "a-b" := by decide
 
-#eval do
+#eval show IO Unit from do
   let inputs := c99Keywords ++ cReservedExtra ++
     ["", "2x", "3abc", "!@#", "0", "a-b", "hello", "tl_x", "_x", "v*o*i*d"]
   let mut failures := #[]
@@ -155,7 +155,7 @@ example : exprToC (.litInt 42) = exprToC (.litInt 42) := rfl
 example : exprToC (.binOp .add (.varRef (.user "x")) (.litInt 1))
     = exprToC (.binOp .add (.varRef (.user "x")) (.litInt 1)) := rfl
 
-#eval do
+#eval show IO Unit from do
   -- Check determinism by running twice
   let stmts : List Stmt := [
     .skip, .break_, .continue_, .return_ none,
@@ -175,7 +175,7 @@ example : exprToC (.binOp .add (.varRef (.user "x")) (.litInt 1))
 
 /-! ## P6 — P2 INVARIANT: exprToC balanced parentheses -/
 
-#eval do
+#eval show IO Unit from do
   let exprs : List LowLevelExpr := [
     .litInt 0,
     .litInt 42,

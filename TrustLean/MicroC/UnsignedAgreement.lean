@@ -129,9 +129,9 @@ theorem evalMicroCUnaryOp_uint32_agree_neg (n : Int) (h : InUInt32Range (-n)) :
              wrapWidth_of_inRange 32 _ h.1 h.2]
 
 /-- Non-vacuity: negation agreement IS satisfiable for n = 0. -/
-example : InUInt32Range (-(0 : Int)) := by native_decide
+example : InUInt32Range (-(0 : Int)) := by unfold InUInt32Range; decide
 /-- Non-vacuity: negation agreement IS satisfiable for n ≤ 0 (e.g., n = -42). -/
-example : InUInt32Range (-(-42 : Int)) := by native_decide
+example : InUInt32Range (-(-42 : Int)) := by unfold InUInt32Range; decide
 
 /-- Logical not always agrees. -/
 theorem evalMicroCUnaryOp_uint32_agree_lnot (b : Bool) :

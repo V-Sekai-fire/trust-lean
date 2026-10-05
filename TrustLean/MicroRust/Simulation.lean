@@ -103,7 +103,7 @@ private theorem microRustBridge_array_update {env : LowLevelEnv} {mcEnv : MicroR
         show varNameToRust w = name ++ "[" ++ toString i ++ "]"
         exact heq
       exact hinj this
-    simp [hw, hne, hb w]
+    rw [if_neg hw, if_neg hne]; exact hb w
 
 /-! ## While simulation helper -/
 

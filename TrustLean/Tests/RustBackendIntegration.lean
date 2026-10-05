@@ -12,6 +12,10 @@ import TrustLean.Backend.Common
 
 set_option autoImplicit false
 
+/-- Substring test for emitted code. -/
+private def String.containsSubstr (s sub : String) : Bool :=
+  (s.splitOn sub).length > 1
+
 namespace TrustLean
 
 /-! ## Smoke Tests: All 12 Stmt Constructors Produce Expected Rust -/
@@ -155,12 +159,13 @@ namespace TrustLean
 
 /-- Non-vacuity witness: a complex nested program generates non-empty Rust code
     with balanced braces and correct structure. -/
-example : let prog := Stmt.while (.litBool true)
+private def nestedProg : Stmt := Stmt.while (.litBool true)
     (.seq (.ite (.binOp .ltOp (.varRef (.user "x")) (.litInt 10))
       (.assign (.user "x") (.binOp .add (.varRef (.user "x")) (.litInt 1)))
       (.seq (.assign (.user "y") (.litInt 0)) .break_))
     (.assign (.user "z") (.varRef (.user "x"))))
-  let code := stmtToRust 0 prog
-  countChar '{' code = countChar '}' code := by decide
+
+example : countChar '{' (stmtToRust 0 nestedProg) = countChar '}' (stmtToRust 0 nestedProg) := by
+  decide
 
 end TrustLean

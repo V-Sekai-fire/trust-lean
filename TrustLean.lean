@@ -6,5 +6,9 @@ import TrustLean.Pipeline
 import TrustLean.Bridge
 import TrustLean.Tests.Integration
 import TrustLean.Tests.BridgeIntegration
+import TrustLean.Tests.CBackendIntegration
+import TrustLean.Tests.RustBackendIntegration
 import TrustLean.MicroC
+import TrustLean.MicroRust
+import TrustLean.Plonky3
 import TrustLean.Vec

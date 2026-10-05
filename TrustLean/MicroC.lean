@@ -26,3 +26,12 @@ import TrustLean.MicroC.Int64Eval
 import TrustLean.MicroC.Int64Agreement
 import TrustLean.MicroC.CallTypes
 import TrustLean.MicroC.CallEval
+import TrustLean.MicroC.CallSimulation
+import TrustLean.MicroC.RoundtripExpr
+import TrustLean.MicroC.RoundtripStmt
+import TrustLean.MicroC.RoundtripMaster
+-- v3.1 unsigned modules
+import TrustLean.MicroC.UnsignedEval
+import TrustLean.MicroC.UnsignedAgreement
+import TrustLean.MicroC.UnsignedFuelMono
+import TrustLean.MicroC.UnsignedSimulation

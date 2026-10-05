@@ -42,7 +42,7 @@ The formal guarantee is:
 These compose to give: for in-range programs, evalStmt ≈ evalMicroC ≈ evalMicroC_uint32.
 For wrapping programs, evalMicroC_uint32 is the authoritative evaluator with proven fuel mono. -/
 
-/-- The unsigned evaluator is an extension of the unbounded evaluator:
+/- The unsigned evaluator is an extension of the unbounded evaluator:
     any program that produces a result under evalMicroC also terminates
     (potentially with different Int values) under evalMicroC_uint32.
     This is a weaker statement than full equivalence, but it guarantees
