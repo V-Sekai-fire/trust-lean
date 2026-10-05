@@ -81,17 +81,17 @@ example :
     (do let (_, e) ← evalMicroC_int64 10 MicroCEnv.default (.assign "x" (.litInt 42))
         pure (e "x")) = some (.int 42) := by native_decide
 
-/-- Oracle: evalMicroC_int64 addition wraps at maxInt64. -/
+/-- Oracle: evalMicroC_int64 addition past maxInt64 is undefined (C11 6.5p5), so none. -/
 example :
     let env₀ : MicroCEnv := fun s => if s == "x" then Value.int maxInt64 else Value.int 0
     (do let (_, e) ← evalMicroC_int64 10 env₀ (.assign "y" (.binOp .add (.varRef "x") (.litInt 1)))
-        pure (e "y")) = some (.int minInt64) := by native_decide
+        pure (e "y")) = none := by native_decide
 
-/-- Oracle: evalMicroC_int64 subtraction wraps at minInt64. -/
+/-- Oracle: evalMicroC_int64 subtraction past minInt64 is undefined, so none. -/
 example :
     let env₀ : MicroCEnv := fun s => if s == "x" then Value.int minInt64 else Value.int 0
     (do let (_, e) ← evalMicroC_int64 10 env₀ (.assign "y" (.binOp .sub (.varRef "x") (.litInt 1)))
-        pure (e "y")) = some (.int maxInt64) := by native_decide
+        pure (e "y")) = none := by native_decide
 
 /-! ### Int64 Agreement Oracle Tests -/
 

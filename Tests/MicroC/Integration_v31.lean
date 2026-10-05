@@ -107,7 +107,7 @@ example :
           (.assign "x" (.binOp .bxor (.litInt 7) (.litInt 3)))
         pure (e "x")) = some (.int 4) := by native_decide
 
-/-- Smoke test: cast (int32_t)(2^32 + 99) = 99 -/
+/-- Smoke test: cast (uint32_t)(2^32 + 99) = 99 -/
 example :
     (do let (_, e) ← evalMicroC_int64 10 MicroCEnv.default
           (.assign "x" (.unaryOp .trunc64to32 (.litInt (2^32 + 99))))
@@ -158,10 +158,10 @@ example :
           (.assign "x" (.binOp .add (.litInt 3) (.litInt 4)))
         pure (e "x")) = some (.int 7) := by native_decide
 
-/-- Regression: Int64 overflow still wraps correctly -/
+/-- Regression: Int64 overflow is undefined (C11 6.5p5), so none -/
 example :
     (do let (_, e) ← evalMicroC_int64 10 MicroCEnv.default
           (.assign "x" (.binOp .add (.litInt 9223372036854775807) (.litInt 1)))
-        pure (e "x")) = some (.int (-9223372036854775808)) := by native_decide
+        pure (e "x")) = none := by native_decide
 
 end TrustLean

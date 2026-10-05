@@ -11,8 +11,8 @@
     -- Conditional subtract for canonical representative
 
   MicroC program: models the final conditional subtract stage for values < 2*P.
-  The uint64 evaluator's shift-by-64 modular behavior (64 % 64 = 0) prevents
-  modeling the full 128-bit fold in MicroC. The algebraic spec handles all inputs.
+  A uint64 shift by 64 is undefined (C11 6.5.7p3; the evaluator gives none), which
+  prevents modeling the full 128-bit fold in MicroC. The algebraic spec handles all inputs.
 
   Correctness: goldilocks_reduce_spec x = x % P for x < 2^128.
 -/
@@ -152,7 +152,7 @@ example : goldilocks_reduce_spec (2^80 + 7) = (2^80 + 7) % goldilocks_P := by na
     has brought the value below 2*P.
 
     The full 128-bit fold cannot be modeled in the uint64 MicroC evaluator because
-    the shift-by-64 instruction wraps (64 % 64 = 0, standard hardware behavior).
+    a shift by 64 is undefined there.
     The algebraic spec (goldilocks_reduce_spec) handles the full fold.
 
     Input: env "x" contains a value in [0, 2*P).

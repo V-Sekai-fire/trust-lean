@@ -1,14 +1,15 @@
 /-
   Trust-Lean — Verified Code Generation Framework
-  MicroC/Int64Eval.lean: Int64 Evaluator with Wrapping Semantics (v3.0.0)
+  MicroC/Int64Eval.lean: Int64 Evaluator with C11 Undefined Behaviour as none (v3.0.0)
 
-  N14.2: Int64 evaluator that wraps arithmetic operations through wrapInt64.
-  Mirrors evalMicroC/evalMicroCExpr structure, replacing arithmetic with
-  Int64 wrapping variants. Fuel monotonicity follows same proof strategy.
+  N14.2: Int64 evaluator for programs whose integers are `int64_t`.
+  Mirrors evalMicroC/evalMicroCExpr structure. An operation C11 leaves undefined or
+  implementation-defined evaluates to `none`; every other one gives the exact result.
+  Fuel monotonicity follows same proof strategy.
 
   Key definitions:
-  - evalMicroCBinOp_int64: wraps arithmetic results via addInt64/subInt64/mulInt64
-  - evalMicroCUnaryOp_int64: wraps negation via negInt64
+  - evalMicroCBinOp_int64: checkedInt64 on add/sub/mul/band/bor/bxor, shlInt64/shrInt64 on shifts
+  - evalMicroCUnaryOp_int64: checkedInt64 on negation, `n % 2^32` on the casts
   - evalMicroCExpr_int64: expression evaluator with int64 wrapping at operations
   - evalMicroC_int64: statement evaluator using int64 expressions
 
@@ -27,44 +28,46 @@ namespace TrustLean
 
 /-! ## Int64 Operator Evaluation -/
 
-/-- Evaluate a MicroC binary operator with Int64 wrapping.
-    Arithmetic results (add, sub, mul) are wrapped via addInt64/subInt64/mulInt64.
+/-- Evaluate a MicroC binary operator on `int64_t` operands.
+    An int result is the exact one when `int64_t` represents it and C11 defines the operation,
+    else `none`: overflow (6.5p5), a shift count outside `[0, 64)` (6.5.7p3), a left shift of a
+    negative or unrepresentable value (6.5.7p4), and a right shift of a negative value (6.5.7p5).
     Comparison and logical operations return Bool, unchanged from unbounded. -/
 def evalMicroCBinOp_int64 (op : MicroCBinOp) (v1 v2 : Value) : Option Value :=
   match op, v1, v2 with
-  | .add, .int a, .int b => some (.int (addInt64 a b))
-  | .sub, .int a, .int b => some (.int (subInt64 a b))
-  | .mul, .int a, .int b => some (.int (mulInt64 a b))
+  | .add, .int a, .int b => (checkedInt64 (a + b)).map .int
+  | .sub, .int a, .int b => (checkedInt64 (a - b)).map .int
+  | .mul, .int a, .int b => (checkedInt64 (a * b)).map .int
   | .eqOp, .int a, .int b => some (.bool (a == b))
   | .ltOp, .int a, .int b => some (.bool (decide (a < b)))
   | .land, .bool a, .bool b => some (.bool (a && b))
   | .lor, .bool a, .bool b => some (.bool (a || b))
-  | .band, .int a, .int b => some (.int (wrapInt64 (Int.land a b)))
-  | .bor, .int a, .int b => some (.int (wrapInt64 (Int.lor a b)))
-  | .bxor, .int a, .int b => some (.int (wrapInt64 (Int.xor a b)))
-  | .bshl, .int a, .int b => some (.int (wrapInt64 (Int.shiftLeft a (b.toNat % 64))))
-  | .bshr, .int a, .int b => some (.int (wrapInt64 (Int.shiftRight a (b.toNat % 64))))
+  | .band, .int a, .int b => (checkedInt64 (Int.land a b)).map .int
+  | .bor, .int a, .int b => (checkedInt64 (Int.lor a b)).map .int
+  | .bxor, .int a, .int b => (checkedInt64 (Int.xor a b)).map .int
+  | .bshl, .int a, .int b => (shlInt64 a b).map .int
+  | .bshr, .int a, .int b => (shrInt64 a b).map .int
   | _, _, _ => none
 
-/-- Evaluate a MicroC unary operator with Int64 wrapping.
-    Negation is wrapped via negInt64. Logical not unchanged.
-    Casting ops wrapped via wrapInt64. -/
+/-- Evaluate a MicroC unary operator on `int64_t` operands.
+    Negating `minInt64` overflows (C11 6.5p5) and gives `none`. Both casts give `n % 2^32`,
+    as `(uint32_t)` and `(int64_t)(uint32_t)` do. -/
 def evalMicroCUnaryOp_int64 (op : MicroCUnaryOp) (v : Value) : Option Value :=
   match op, v with
-  | .neg, .int n => some (.int (negInt64 n))
+  | .neg, .int n => (checkedInt64 (-n)).map .int
   | .lnot, .bool b => some (.bool (!b))
-  | .widen32to64, .int n => some (.int (wrapInt64 (n % (2^32 : Int))))
-  | .trunc64to32, .int n => some (.int (wrapInt64 (n % (2^32 : Int))))
+  | .widen32to64, .int n => some (.int (n % (2^32 : Int)))
+  | .trunc64to32, .int n => some (.int (n % (2^32 : Int)))
   | _, _ => none
 
 /-! ## Int64 Operator @[simp] Lemmas -/
 
 @[simp] theorem evalMicroCBinOp_int64_add (a b : Int) :
-    evalMicroCBinOp_int64 .add (.int a) (.int b) = some (.int (addInt64 a b)) := rfl
+    evalMicroCBinOp_int64 .add (.int a) (.int b) = (checkedInt64 (a + b)).map .int := rfl
 @[simp] theorem evalMicroCBinOp_int64_sub (a b : Int) :
-    evalMicroCBinOp_int64 .sub (.int a) (.int b) = some (.int (subInt64 a b)) := rfl
+    evalMicroCBinOp_int64 .sub (.int a) (.int b) = (checkedInt64 (a - b)).map .int := rfl
 @[simp] theorem evalMicroCBinOp_int64_mul (a b : Int) :
-    evalMicroCBinOp_int64 .mul (.int a) (.int b) = some (.int (mulInt64 a b)) := rfl
+    evalMicroCBinOp_int64 .mul (.int a) (.int b) = (checkedInt64 (a * b)).map .int := rfl
 @[simp] theorem evalMicroCBinOp_int64_eqOp (a b : Int) :
     evalMicroCBinOp_int64 .eqOp (.int a) (.int b) = some (.bool (a == b)) := rfl
 @[simp] theorem evalMicroCBinOp_int64_ltOp (a b : Int) :
@@ -75,35 +78,102 @@ def evalMicroCUnaryOp_int64 (op : MicroCUnaryOp) (v : Value) : Option Value :=
     evalMicroCBinOp_int64 .lor (.bool a) (.bool b) = some (.bool (a || b)) := rfl
 
 @[simp] theorem evalMicroCBinOp_int64_band (a b : Int) :
-    evalMicroCBinOp_int64 .band (.int a) (.int b) = some (.int (wrapInt64 (Int.land a b))) := rfl
+    evalMicroCBinOp_int64 .band (.int a) (.int b) = (checkedInt64 (Int.land a b)).map .int := rfl
 @[simp] theorem evalMicroCBinOp_int64_bor (a b : Int) :
-    evalMicroCBinOp_int64 .bor (.int a) (.int b) = some (.int (wrapInt64 (Int.lor a b))) := rfl
+    evalMicroCBinOp_int64 .bor (.int a) (.int b) = (checkedInt64 (Int.lor a b)).map .int := rfl
 @[simp] theorem evalMicroCBinOp_int64_bxor (a b : Int) :
-    evalMicroCBinOp_int64 .bxor (.int a) (.int b) = some (.int (wrapInt64 (Int.xor a b))) := rfl
+    evalMicroCBinOp_int64 .bxor (.int a) (.int b) = (checkedInt64 (Int.xor a b)).map .int := rfl
 @[simp] theorem evalMicroCBinOp_int64_bshl (a b : Int) :
-    evalMicroCBinOp_int64 .bshl (.int a) (.int b) =
-    some (.int (wrapInt64 (Int.shiftLeft a (b.toNat % 64)))) := rfl
+    evalMicroCBinOp_int64 .bshl (.int a) (.int b) = (shlInt64 a b).map .int := rfl
 @[simp] theorem evalMicroCBinOp_int64_bshr (a b : Int) :
-    evalMicroCBinOp_int64 .bshr (.int a) (.int b) =
-    some (.int (wrapInt64 (Int.shiftRight a (b.toNat % 64)))) := rfl
+    evalMicroCBinOp_int64 .bshr (.int a) (.int b) = (shrInt64 a b).map .int := rfl
 
 @[simp] theorem evalMicroCUnaryOp_int64_neg (n : Int) :
-    evalMicroCUnaryOp_int64 .neg (.int n) = some (.int (negInt64 n)) := rfl
+    evalMicroCUnaryOp_int64 .neg (.int n) = (checkedInt64 (-n)).map .int := rfl
 @[simp] theorem evalMicroCUnaryOp_int64_lnot (b : Bool) :
     evalMicroCUnaryOp_int64 .lnot (.bool b) = some (.bool (!b)) := rfl
 @[simp] theorem evalMicroCUnaryOp_int64_widen32to64 (n : Int) :
-    evalMicroCUnaryOp_int64 .widen32to64 (.int n) =
-    some (.int (wrapInt64 (n % (2^32 : Int)))) := rfl
+    evalMicroCUnaryOp_int64 .widen32to64 (.int n) = some (.int (n % (2^32 : Int))) := rfl
 @[simp] theorem evalMicroCUnaryOp_int64_trunc64to32 (n : Int) :
-    evalMicroCUnaryOp_int64 .trunc64to32 (.int n) =
-    some (.int (wrapInt64 (n % (2^32 : Int)))) := rfl
+    evalMicroCUnaryOp_int64 .trunc64to32 (.int n) = some (.int (n % (2^32 : Int))) := rfl
+
+/-! ## Int64 Results Are Representable -/
+
+/-- Every int the int64 binary evaluator returns is an `int64_t` value. -/
+theorem evalMicroCBinOp_int64_inRange (op : MicroCBinOp) (v1 v2 : Value) (n : Int)
+    (h : evalMicroCBinOp_int64 op v1 v2 = some (.int n)) : InInt64Range n := by
+  cases op <;> cases v1 <;> cases v2 <;>
+    simp only [evalMicroCBinOp_int64, Option.map_eq_some_iff, Option.some.injEq,
+      reduceCtorEq, Value.int.injEq] at h <;>
+    first
+    | (obtain ⟨m, hm, rfl⟩ := h; exact inRange_of_checkedInt64 hm)
+    | (obtain ⟨m, hm, rfl⟩ := h; exact inRange_of_checkedInt64 (shlInt64_eq_some.mp hm).2)
+    | (obtain ⟨m, hm, rfl⟩ := h; exact inRange_of_checkedInt64 (shrInt64_eq_some.mp hm).2)
+
+/-- Every int the int64 unary evaluator returns is an `int64_t` value. -/
+theorem evalMicroCUnaryOp_int64_inRange (op : MicroCUnaryOp) (v : Value) (n : Int)
+    (h : evalMicroCUnaryOp_int64 op v = some (.int n)) : InInt64Range n := by
+  have hmod : ∀ m : Int, InInt64Range (m % (2^32 : Int)) := fun m => by
+    have h0 := Int.emod_nonneg m (show (2^32 : Int) ≠ 0 by decide)
+    have h1 := Int.emod_lt_of_pos m (show (0 : Int) < 2^32 by decide)
+    unfold InInt64Range minInt64 maxInt64; omega
+  cases op <;> cases v <;>
+    simp only [evalMicroCUnaryOp_int64, Option.map_eq_some_iff, Option.some.injEq,
+      reduceCtorEq, Value.int.injEq] at h
+  · obtain ⟨m, hm, rfl⟩ := h; exact inRange_of_checkedInt64 hm
+  · subst h; exact hmod _
+  · subst h; exact hmod _
+
+/-- `int64_t` addition is defined exactly when the sum is representable (C11 6.5p5). -/
+theorem evalMicroCBinOp_int64_add_eq_some (a b c : Int) :
+    evalMicroCBinOp_int64 .add (.int a) (.int b) = some (.int c) ↔ InInt64Range (a + b) ∧ c = a + b := by
+  simp only [evalMicroCBinOp_int64_add, Option.map_eq_some_iff, Value.int.injEq, exists_eq_right]
+  exact checkedInt64_eq_some
+
+/-- `int64_t` subtraction is defined exactly when the difference is representable. -/
+theorem evalMicroCBinOp_int64_sub_eq_some (a b c : Int) :
+    evalMicroCBinOp_int64 .sub (.int a) (.int b) = some (.int c) ↔ InInt64Range (a - b) ∧ c = a - b := by
+  simp only [evalMicroCBinOp_int64_sub, Option.map_eq_some_iff, Value.int.injEq, exists_eq_right]
+  exact checkedInt64_eq_some
+
+/-- `int64_t` multiplication is defined exactly when the product is representable. -/
+theorem evalMicroCBinOp_int64_mul_eq_some (a b c : Int) :
+    evalMicroCBinOp_int64 .mul (.int a) (.int b) = some (.int c) ↔ InInt64Range (a * b) ∧ c = a * b := by
+  simp only [evalMicroCBinOp_int64_mul, Option.map_eq_some_iff, Value.int.injEq, exists_eq_right]
+  exact checkedInt64_eq_some
+
+/-- `int64_t` negation is defined exactly when the negation is representable. -/
+theorem evalMicroCUnaryOp_int64_neg_eq_some (a c : Int) :
+    evalMicroCUnaryOp_int64 .neg (.int a) = some (.int c) ↔ InInt64Range (-a) ∧ c = -a := by
+  simp only [evalMicroCUnaryOp_int64_neg, Option.map_eq_some_iff, Value.int.injEq, exists_eq_right]
+  exact checkedInt64_eq_some
+
+/-- `INT64_MAX + 1` overflows: undefined in C11, `none` here. -/
+theorem evalMicroCBinOp_int64_add_maxInt64_one :
+    evalMicroCBinOp_int64 .add (.int maxInt64) (.int 1) = none := by decide
+
+/-- `-INT64_MIN` overflows. -/
+theorem evalMicroCUnaryOp_int64_neg_minInt64 :
+    evalMicroCUnaryOp_int64 .neg (.int minInt64) = none := by decide
+
+/-- A shift by 64 is undefined (C11 6.5.7p3). -/
+theorem evalMicroCBinOp_int64_shl_64 :
+    evalMicroCBinOp_int64 .bshl (.int 1) (.int 64) = none := by decide
+
+/-- `1 << 63` is not representable in `int64_t` (C11 6.5.7p4). -/
+theorem evalMicroCBinOp_int64_shl_1_63 :
+    evalMicroCBinOp_int64 .bshl (.int 1) (.int 63) = none := by decide
+
+/-- `-1 >> 1` is implementation-defined (C11 6.5.7p5). -/
+theorem evalMicroCBinOp_int64_shr_neg :
+    evalMicroCBinOp_int64 .bshr (.int (-1)) (.int 1) = none := by decide
 
 /-! ## Int64 Expression Evaluator -/
 
-/-- Evaluate a MicroC expression with Int64 wrapping at arithmetic operations.
-    Literals and variable references are NOT wrapped (assumed in range for
-    well-formed programs). Wrapping occurs at: binOp (add/sub/mul),
-    unaryOp (neg), powCall. -/
+/-- Evaluate a MicroC expression on `int64_t` values.
+    Literals and variable references are taken as they are (assumed in range for
+    well-formed programs). binOp and unaryOp give `none` where C11 is undefined;
+    powCall wraps through wrapInt64. -/
 def evalMicroCExpr_int64 (env : MicroCEnv) : MicroCExpr → Option Value
   | .litInt n => some (.int n)
   | .litBool b => some (.bool b)
@@ -158,7 +228,7 @@ def evalMicroCExpr_int64 (env : MicroCEnv) : MicroCExpr → Option Value
 
 /-! ## Int64 Statement Evaluator -/
 
-/-- Evaluate a MicroC statement with Int64 wrapping semantics.
+/-- Evaluate a MicroC statement on `int64_t` values.
     Identical control flow to evalMicroC, but uses evalMicroCExpr_int64
     for expression evaluation.
     Termination: lexicographic on (fuel, sizeOf stmt). -/
@@ -462,7 +532,7 @@ theorem evalMicroC_int64_deterministic (fuel : Nat) (env : MicroCEnv) (s : Micro
   let (oc, env) ← evalMicroC_int64 10 MicroCEnv.default (.assign "x" (.litInt 42))
   return (oc, env "x")
 
--- Overflow: maxInt64 + 1 wraps to minInt64
+-- Overflow: maxInt64 + 1 is undefined, so none
 #eval do
   let env₀ : MicroCEnv := fun s => if s == "x" then Value.int maxInt64 else Value.int 0
   let (oc, env) ← evalMicroC_int64 10 env₀ (.assign "y" (.binOp .add (.varRef "x") (.litInt 1)))
@@ -474,13 +544,13 @@ theorem evalMicroC_int64_deterministic (fuel : Nat) (env : MicroCEnv) (s : Micro
     (.assign "x" (.binOp .add (.litInt 3) (.litInt 4)))
   return (oc, env "x")
 
--- Underflow: minInt64 - 1 wraps to maxInt64
+-- Underflow: minInt64 - 1 is undefined, so none
 #eval do
   let env₀ : MicroCEnv := fun s => if s == "x" then Value.int minInt64 else Value.int 0
   let (oc, env) ← evalMicroC_int64 10 env₀ (.assign "y" (.binOp .sub (.varRef "x") (.litInt 1)))
   return (oc, env "y")
 
--- Multiplication overflow: maxInt64 * 2
+-- Multiplication overflow: maxInt64 * 2 is undefined, so none
 #eval do
   let env₀ : MicroCEnv := fun s => if s == "x" then Value.int maxInt64 else Value.int 0
   let (oc, env) ← evalMicroC_int64 10 env₀ (.assign "y" (.binOp .mul (.varRef "x") (.litInt 2)))

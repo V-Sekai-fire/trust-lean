@@ -13,7 +13,7 @@
   - Flat namespace: no shadowing, no nested scopes (v2.0.0 simplification)
   - MicroCEnv: String → Value (functional environment, no heap)
   - No short-circuit &&/||: pure expressions, so semantically equivalent
-  - Int = Lean Int (unbounded): int64_t wrapping deferred to v3.0
+  - Int = Lean Int (unbounded) in evalMicroC; the int64/uint32/uint64 evaluators bound it
 -/
 
 import TrustLean.Core.Value

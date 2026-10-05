@@ -5,7 +5,7 @@
   Closes the formal gap for Goldilocks (P = 2^64 - 2^32 + 1):
   - Proves (P-1)*(P-1) < 2^128 (InUInt128Range)
   - Models the full Goldilocks two-fold reduction in MicroC using evalMicroC_uint128
-    (shift-by-64 works because 64 % 128 = 64, unlike uint64 where 64 % 64 = 0)
+    (shift-by-64 is defined for unsigned __int128, unlike uint64 where it is undefined)
   - Demonstrates agreement between uint128 and unbounded evaluators for Goldilocks ops
 
   This enables truth_research_zk to import and prove verified codegen for Goldilocks.
@@ -58,11 +58,11 @@ theorem goldilocks_sub_fits_uint128 (a b : Int)
 
 /-! ## Key: Shift-by-64 Works in UInt128 -/
 
-/-- In uint128 mode: 64 % 128 = 64, so shift-by-64 extracts high bits correctly. -/
-example : (64 : Int).toNat % 128 = 64 := by native_decide
+/-- In uint128 mode a shift by 64 is defined and extracts the high bits. -/
+example : evalMicroCBinOp_uint128 .bshr (.int (2^64 + 42)) (.int 64) = some (.int 1) := by decide
 
-/-- In uint64 mode: 64 % 64 = 0, so shift-by-64 is broken (returns the input unchanged). -/
-example : (64 : Int).toNat % 64 = 0 := by native_decide
+/-- In uint64 mode a shift by 64 is undefined (C11 6.5.7p3), so none. -/
+example : evalMicroCBinOp_uint64 .bshr (.int (2^64 + 42)) (.int 64) = none := by decide
 
 /-! ## Full Goldilocks Fold in MicroC (via evalMicroC_uint128)
 

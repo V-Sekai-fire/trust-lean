@@ -133,6 +133,45 @@ theorem addInt64_comm (a b : Int) : addInt64 a b = addInt64 b a := by
 theorem addInt64_zero (a : Int) (h : InInt64Range a) : addInt64 a 0 = a := by
   unfold addInt64; simp; exact wrapInt64_of_inRange a h
 
+/-! ## Undefined Behaviour (C11 6.5p5, 6.5.7p3-5) -/
+
+/-- `n` when `int64_t` represents it, else `none`: C11 6.5p5 leaves signed overflow undefined. -/
+def checkedInt64 (n : Int) : Option Int := if InInt64Range n then some n else none
+
+/-- `a << b` on `int64_t`: defined only for `0 ≤ b < 64`, `0 ≤ a` and `a * 2^b` representable
+    (C11 6.5.7p3-4). -/
+def shlInt64 (a b : Int) : Option Int :=
+  if 0 ≤ b ∧ b < 64 ∧ 0 ≤ a then checkedInt64 (Int.shiftLeft a b.toNat) else none
+
+/-- `a >> b` on `int64_t`: undefined unless `0 ≤ b < 64` (C11 6.5.7p3); a negative `a` gives an
+    implementation-defined value (6.5.7p5), which is `none` as well. -/
+def shrInt64 (a b : Int) : Option Int :=
+  if 0 ≤ b ∧ b < 64 ∧ 0 ≤ a then checkedInt64 (Int.shiftRight a b.toNat) else none
+
+theorem checkedInt64_eq_some {n m : Int} : checkedInt64 n = some m ↔ InInt64Range n ∧ m = n := by
+  unfold checkedInt64; split <;> simp_all [eq_comm]
+
+theorem checkedInt64_of_inRange {n : Int} (h : InInt64Range n) : checkedInt64 n = some n := by
+  simp [checkedInt64, h]
+
+theorem checkedInt64_of_not_inRange {n : Int} (h : ¬ InInt64Range n) : checkedInt64 n = none := by
+  simp [checkedInt64, h]
+
+theorem inRange_of_checkedInt64 {n m : Int} (h : checkedInt64 n = some m) : InInt64Range m :=
+  (checkedInt64_eq_some.mp h).2 ▸ (checkedInt64_eq_some.mp h).1
+
+theorem shlInt64_eq_some {a b m : Int} :
+    shlInt64 a b = some m ↔ (0 ≤ b ∧ b < 64 ∧ 0 ≤ a) ∧ checkedInt64 (Int.shiftLeft a b.toNat) = some m := by
+  unfold shlInt64; split
+  · simp_all
+  · simp only [reduceCtorEq, false_iff]; intro ⟨h, _⟩; contradiction
+
+theorem shrInt64_eq_some {a b m : Int} :
+    shrInt64 a b = some m ↔ (0 ≤ b ∧ b < 64 ∧ 0 ≤ a) ∧ checkedInt64 (Int.shiftRight a b.toNat) = some m := by
+  unfold shrInt64; split
+  · simp_all
+  · simp only [reduceCtorEq, false_iff]; intro ⟨h, _⟩; contradiction
+
 /-! ## Smoke Tests -/
 
 #eval wrapInt64 0                    -- 0

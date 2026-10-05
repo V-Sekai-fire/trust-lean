@@ -5,13 +5,9 @@
   Split pattern (L-630):
   - Arithmetic (add/sub/mul): CONDITIONAL on InUInt128Range(result)
   - Bitwise non-shift (band/bor/bxor): CONDITIONAL on InUInt128Range(result)
-  - Bitwise shift (bshl/bshr): CONDITIONAL on InUInt128Range + shift modulus match
-    (core evaluator uses % 64, uint128 evaluator uses % 128 — agreement requires
-     b.toNat % 128 = b.toNat % 64, which holds when shift amount < 64)
+  - Bitwise shift (bshl/bshr): CONDITIONAL on InUInt128Range + a count in [0, 64)
+    (core evaluator uses % 64, uint128 evaluator is defined on [0, 128))
   - Comparison/logical (eqOp/ltOp/land/lor): UNCONDITIONAL (produce Bool)
-
-  Design: evalMicroCBinOp_uint128 uses % 128 for shifts (modeling __uint128_t).
-  The core evalBinOp uses % 64. Agreement for shifts holds when amounts < 64.
 -/
 import TrustLean.MicroC.UInt128Eval
 
@@ -83,35 +79,37 @@ theorem evalMicroCBinOp_uint128_agree_bxor (a b : Int) (h : InUInt128Range (Int.
   simp only [evalMicroCBinOp_uint128_bxor, evalMicroCBinOp, evalBinOp, microCBinOpToCore,
              wrapWidth_of_inRange 128 _ h.1 h.2]
 
-/-! ### Bitwise shift: CONDITIONAL + modulus match
-    Core evalBinOp uses b.toNat % 64; uint128 evaluator uses b.toNat % 128.
-    Agreement requires shift amounts to coincide (true when b.toNat < 64). -/
+/-! ### Bitwise shift: CONDITIONAL + count match
+    Core evalBinOp uses b.toNat % 64; the uint128 evaluator needs 0 ≤ b < 128.
+    Agreement requires shift amounts to coincide (true when 0 ≤ b < 64). -/
 
-theorem evalMicroCBinOp_uint128_agree_bshl (a b : Int)
-    (hmod : b.toNat % 128 = b.toNat % 64)
-    (h : InUInt128Range (Int.shiftLeft a (b.toNat % 128))) :
+theorem evalMicroCBinOp_uint128_agree_bshl (a b : Int) (hb : 0 ≤ b ∧ b < 64)
+    (h : InUInt128Range (Int.shiftLeft a (b.toNat % 64))) :
     evalMicroCBinOp_uint128 .bshl (.int a) (.int b) =
     evalMicroCBinOp .bshl (.int a) (.int b) := by
-  rw [hmod] at h
-  simp only [evalMicroCBinOp_uint128_bshl, evalMicroCBinOp, evalBinOp, microCBinOpToCore,
-             hmod, wrapWidth_of_inRange 128 _ h.1 h.2]
+  have hm : b.toNat % 64 = b.toNat := Nat.mod_eq_of_lt (by omega)
+  have hc : 0 ≤ b ∧ b < 128 := ⟨hb.1, by omega⟩
+  rw [hm] at h
+  simp only [evalMicroCBinOp_uint128_bshl, if_pos hc, evalMicroCBinOp, evalBinOp,
+             microCBinOpToCore, hm, wrapWidth_of_inRange 128 _ h.1 h.2]
 
-theorem evalMicroCBinOp_uint128_agree_bshr (a b : Int)
-    (hmod : b.toNat % 128 = b.toNat % 64)
-    (h : InUInt128Range (Int.shiftRight a (b.toNat % 128))) :
+theorem evalMicroCBinOp_uint128_agree_bshr (a b : Int) (hb : 0 ≤ b ∧ b < 64)
+    (h : InUInt128Range (Int.shiftRight a (b.toNat % 64))) :
     evalMicroCBinOp_uint128 .bshr (.int a) (.int b) =
     evalMicroCBinOp .bshr (.int a) (.int b) := by
-  rw [hmod] at h
-  simp only [evalMicroCBinOp_uint128_bshr, evalMicroCBinOp, evalBinOp, microCBinOpToCore,
-             hmod, wrapWidth_of_inRange 128 _ h.1 h.2]
+  have hm : b.toNat % 64 = b.toNat := Nat.mod_eq_of_lt (by omega)
+  have hc : 0 ≤ b ∧ b < 128 := ⟨hb.1, by omega⟩
+  rw [hm] at h
+  simp only [evalMicroCBinOp_uint128_bshr, if_pos hc, evalMicroCBinOp, evalBinOp,
+             microCBinOpToCore, hm, wrapWidth_of_inRange 128 _ h.1 h.2]
 
-/-- Non-vacuity: shift modulus match holds for shift amounts < 64. -/
-example : (4 : Int).toNat % 128 = (4 : Int).toNat % 64 := by native_decide
-example : (63 : Int).toNat % 128 = (63 : Int).toNat % 64 := by native_decide
+/-- Non-vacuity: the count condition holds for shift amounts in [0, 64). -/
+example : (0 : Int) ≤ 4 ∧ (4 : Int) < 64 := by decide
+example : (0 : Int) ≤ 63 ∧ (63 : Int) < 64 := by decide
 
 /-! ## General BinOp Agreement (non-shift ops)
 
-    For bshl/bshr, use the per-op theorems with hmod hypothesis.
+    For bshl/bshr, use the per-op theorems with the count hypothesis.
     This general theorem covers all 10 non-shift binary operators. -/
 
 theorem evalMicroCBinOp_uint128_agree_nonshift (op : MicroCBinOp)

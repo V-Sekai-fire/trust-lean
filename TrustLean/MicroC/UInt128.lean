@@ -6,7 +6,7 @@
   All properties (nonneg, lt, idempotent, of_inRange, composition) inherited
   from wrapWidth in Unsigned.lean — NO redefinition, NO reproof.
 
-  Design decision: shift modulus = % 128 (see UInt128Eval.lean).
+  Design decision: shift counts range over [0, 128) (see UInt128Eval.lean).
 -/
 import TrustLean.MicroC.Unsigned
 
