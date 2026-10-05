@@ -73,11 +73,11 @@ def T4_sanitize_keywords : IO Bool := do
       (.assign (.user "continue") (.litInt 2))
       (.assign (.user "my-variable") (.litInt 3)))
   let code := BackendEmitter.emitStmt cfg 0 s
-  -- Should use sanitized names: tl_for, tl_continue, myvariable (hyphen removed)
-  let hasTlFor := code.containsSubstr "tl_for"
-  let hasTlContinue := code.containsSubstr "tl_continue"
-  -- "my-variable" -> characters filtered, hyphen removed -> "myvariable"
-  let hasSanitizedMyVar := code.containsSubstr "myvariable"
+  -- Should use escaped names: tl_ufor, tl_ucontinue, tl_umy_00002dvariable
+  let hasTlFor := code.containsSubstr "tl_ufor"
+  let hasTlContinue := code.containsSubstr "tl_ucontinue"
+  -- "my-variable" -> the hyphen escapes to _00002d
+  let hasSanitizedMyVar := code.containsSubstr "tl_umy_00002dvariable"
   reportTest "T4_sanitize_keywords" (hasTlFor && hasTlContinue && hasSanitizedMyVar)
 
 /-- T5 BASIC: Coverage of Stmt constructors.

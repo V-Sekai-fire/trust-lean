@@ -10,6 +10,7 @@
 -/
 
 import TrustLean.Core.Value
+import Std.Data.String.ToInt
 
 set_option autoImplicit false
 
@@ -212,6 +213,260 @@ theorem sanitizeIdentifier_valid (s : String) :
           simp only [Bool.or_false] at hvalid
           exact hvalid
         · exact hall
+
+/-! ## Injective Identifier Mapping
+
+    A user name prints unchanged when it is a valid identifier, not reserved, and does
+    not start with `tl_`. Temps print `tl_t<k>`, every other user name prints `tl_u`
+    followed by its escape, and array elements print `base[idx]`. The three shapes
+    cannot collide, so the mapping is injective (`varNameIdent_injective`). -/
+
+/-- Inverse of `Nat.digitChar` on hex digits. -/
+def hexVal (c : Char) : Nat := if c.isDigit then c.toNat - 48 else c.toNat - 87
+
+private theorem hexVal_digitChar (n : Nat) (h : n < 16) : hexVal (Nat.digitChar n) = n :=
+  (by decide : ∀ i : Fin 16, hexVal (Nat.digitChar i) = i) ⟨n, h⟩
+
+private theorem isValidCIdentChar_digitChar (n : Nat) (h : n < 16) :
+    isValidCIdentChar (Nat.digitChar n) = true :=
+  (by decide : ∀ i : Fin 16, isValidCIdentChar (Nat.digitChar i) = true) ⟨n, h⟩
+
+/-- `n` as six lowercase hex digits, most significant first. -/
+def hex6 (n : Nat) : List Char :=
+  [1048576, 65536, 4096, 256, 16, 1].map fun d => Nat.digitChar (n / d % 16)
+
+private theorem hex6_injective {n m : Nat} (hn : n < 16777216) (hm : m < 16777216)
+    (h : hex6 n = hex6 m) : n = m := by
+  have hd : ∀ d, Nat.digitChar (n / d % 16) = Nat.digitChar (m / d % 16) →
+      n / d % 16 = m / d % 16 := fun d e => by
+    rw [← hexVal_digitChar _ (Nat.mod_lt _ (by decide)), e,
+      hexVal_digitChar _ (Nat.mod_lt _ (by decide))]
+  simp only [hex6, List.map_cons, List.map_nil, List.cons.injEq] at h
+  obtain ⟨h5, h4, h3, h2, h1, h0, -⟩ := h
+  have := hd _ h5; have := hd _ h4; have := hd _ h3
+  have := hd _ h2; have := hd _ h1; have := hd _ h0
+  omega
+
+private theorem toNat_lt_hex6 (c : Char) : c.toNat < 16777216 := by
+  have := c.valid
+  simp only [UInt32.isValidChar, Nat.isValidChar] at this
+  show c.val.toNat < _
+  omega
+
+/-- ASCII letters and digits stand for themselves; every other character becomes `_`
+    and six hex digits of its code point. -/
+def escapeChar (c : Char) : List Char :=
+  if c.isAlphanum then [c] else '_' :: hex6 c.toNat
+
+private theorem escapeChar_append_inj {c d : Char} {l r : List Char}
+    (h : escapeChar c ++ l = escapeChar d ++ r) : c = d ∧ l = r := by
+  unfold escapeChar at h
+  by_cases hc : c.isAlphanum <;> by_cases hd : d.isAlphanum <;>
+    simp only [hc, hd, if_true, if_false, Bool.false_eq_true, List.cons_append,
+      List.nil_append, List.cons.injEq] at h
+  · exact h
+  · exact absurd (h.1 ▸ hc) (by decide)
+  · exact absurd (h.1 ▸ hd) (by decide)
+  · obtain ⟨hh, hl⟩ := List.append_inj h.2 (by simp [hex6])
+    exact ⟨Char.toNat_inj.mp (hex6_injective (toNat_lt_hex6 c) (toNat_lt_hex6 d) hh), hl⟩
+
+private theorem escapeChar_ne_nil (c : Char) : escapeChar c ≠ [] := by
+  unfold escapeChar; split <;> simp
+
+private theorem flatMap_escapeChar_injective {l r : List Char}
+    (h : l.flatMap escapeChar = r.flatMap escapeChar) : l = r := by
+  induction l generalizing r with
+  | nil =>
+    cases r with
+    | nil => rfl
+    | cons d r =>
+      simp only [List.flatMap_nil, List.flatMap_cons] at h
+      exact absurd (List.append_eq_nil_iff.mp h.symm).1 (escapeChar_ne_nil d)
+  | cons c l ih =>
+    cases r with
+    | nil =>
+      simp only [List.flatMap_nil, List.flatMap_cons] at h
+      exact absurd (List.append_eq_nil_iff.mp h).1 (escapeChar_ne_nil c)
+    | cons d r =>
+      simp only [List.flatMap_cons] at h
+      obtain ⟨rfl, ht⟩ := escapeChar_append_inj h
+      rw [ih ht]
+
+private theorem escapeChar_valid (c : Char) :
+    ∀ x ∈ escapeChar c, isValidCIdentChar x = true := by
+  intro x hx
+  unfold escapeChar at hx
+  split at hx
+  · rename_i h
+    simp only [List.mem_singleton] at hx; subst hx
+    simp only [isValidCIdentChar, Bool.or_eq_true]
+    exact Or.inl (by simpa [Char.isAlphanum] using h)
+  · simp only [List.mem_cons, hex6, List.map_cons, List.map_nil, List.not_mem_nil,
+      or_false] at hx
+    rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl
+    · decide
+    all_goals exact isValidCIdentChar_digitChar _ (Nat.mod_lt _ (by decide))
+
+/-- Injective escape of an arbitrary string into identifier characters. -/
+def escapeIdent (s : String) : String := String.ofList (s.toList.flatMap escapeChar)
+
+/-- A user name prints unchanged when it is a valid identifier, not in `reserved`,
+    and does not start with `tl_`. -/
+def keepsIdent (reserved : List String) (s : String) : Bool :=
+  isValidCIdent s && !reserved.contains s && s.toList.take 3 != ['t', 'l', '_']
+
+/-- Identifier for a user variable. -/
+def userIdent (reserved : List String) (s : String) : String :=
+  if keepsIdent reserved s then s else "tl_u" ++ escapeIdent s
+
+/-- Identifier for a temp. -/
+def tempIdent (k : Nat) : String := "tl_t" ++ toString k
+
+private theorem not_mem_split {c : Char} :
+    ∀ {a₁ a₂ b₁ b₂ : List Char}, c ∉ a₁ → c ∉ a₂ →
+      a₁ ++ c :: b₁ = a₂ ++ c :: b₂ → a₁ = a₂ ∧ b₁ = b₂
+  | [], [], _, _, _, _, h => ⟨rfl, (List.cons.inj h).2⟩
+  | [], _ :: _, _, _, _, h₂, h =>
+    absurd (List.cons.inj h).1 (fun e => h₂ (e ▸ List.mem_cons_self))
+  | _ :: _, [], _, _, h₁, _, h =>
+    absurd (List.cons.inj h).1.symm (fun e => h₁ (e ▸ List.mem_cons_self))
+  | x :: a₁, y :: a₂, b₁, b₂, h₁, h₂, h => by
+    simp only [List.cons_append, List.cons.injEq] at h
+    obtain ⟨rfl, h⟩ := h
+    obtain ⟨rfl, rfl⟩ := not_mem_split (fun m => h₁ (List.mem_cons_of_mem _ m))
+      (fun m => h₂ (List.mem_cons_of_mem _ m)) h
+    exact ⟨rfl, rfl⟩
+
+private theorem not_mem_split_right {c : Char} {a₁ a₂ b₁ b₂ : List Char}
+    (h₁ : c ∉ b₁) (h₂ : c ∉ b₂) (h : a₁ ++ c :: b₁ = a₂ ++ c :: b₂) :
+    a₁ = a₂ ∧ b₁ = b₂ := by
+  have hr := congrArg List.reverse h
+  simp only [List.reverse_append, List.reverse_cons, List.append_assoc,
+    List.singleton_append] at hr
+  obtain ⟨hb, ha⟩ := not_mem_split (by simpa using h₁) (by simpa using h₂) hr
+  exact ⟨List.reverse_inj.mp ha, List.reverse_inj.mp hb⟩
+
+private theorem isDigit_of_mem_repr {n : Nat} {c : Char} (h : c ∈ (Nat.repr n).toList) :
+    c.isDigit = true := by
+  rw [Nat.toList_repr] at h
+  exact Nat.isDigit_of_mem_toDigits (by decide) (by decide) h
+
+private theorem bracket_not_mem_int (i : Int) : '[' ∉ (toString i).toList := by
+  intro h
+  cases i with
+  | ofNat m => exact absurd (isDigit_of_mem_repr (n := m) h) (by decide)
+  | negSucc m =>
+    change '[' ∈ ("-" ++ Nat.repr (m + 1)).toList at h
+    rw [String.toList_append] at h
+    rcases List.mem_append.mp h with h | h
+    · exact absurd h (by decide)
+    · exact absurd (isDigit_of_mem_repr h) (by decide)
+
+private theorem bracket_not_mem_of_valid {l : List Char}
+    (h : ∀ x ∈ l, isValidCIdentChar x = true) : '[' ∉ l :=
+  fun m => absurd (h _ m) (by decide)
+
+private theorem userIdent_valid (reserved : List String) (s : String) :
+    ∀ x ∈ (userIdent reserved s).toList, isValidCIdentChar x = true := by
+  unfold userIdent
+  split
+  · rename_i hk
+    unfold keepsIdent isValidCIdent at hk
+    intro x hx
+    cases hs : s.toList with
+    | nil => rw [hs] at hk; simp at hk
+    | cons c cs =>
+      rw [hs] at hk hx
+      simp only [Bool.and_eq_true] at hk
+      exact List.all_eq_true.mp hk.1.1.2 x hx
+  · intro x hx
+    simp only [escapeIdent, String.toList_append, String.toList_ofList, List.mem_append,
+      List.mem_flatMap] at hx
+    rcases hx with hx | ⟨c, -, hx⟩
+    · revert x; decide
+    · exact escapeChar_valid c x hx
+
+private theorem tempIdent_valid (k : Nat) :
+    ∀ x ∈ (tempIdent k).toList, isValidCIdentChar x = true := by
+  intro x hx
+  simp only [tempIdent, String.toList_append, List.mem_append] at hx
+  rcases hx with hx | hx
+  · revert x; decide
+  · have := isDigit_of_mem_repr (n := k) hx
+    simp [isValidCIdentChar, this]
+
+private theorem tlu_toList (s : String) :
+    ("tl_u" ++ s).toList = 't' :: 'l' :: '_' :: 'u' :: s.toList := by
+  rw [String.toList_append]; rfl
+
+private theorem tlt_toList (s : String) :
+    ("tl_t" ++ s).toList = 't' :: 'l' :: '_' :: 't' :: s.toList := by
+  rw [String.toList_append]; rfl
+
+private theorem userIdent_cases (reserved : List String) (s : String) :
+    (userIdent reserved s = s ∧ s.toList.take 3 ≠ ['t', 'l', '_']) ∨
+      userIdent reserved s = "tl_u" ++ escapeIdent s := by
+  unfold userIdent
+  split
+  · rename_i hk
+    unfold keepsIdent at hk
+    simp only [Bool.and_eq_true, bne_iff_ne, ne_eq] at hk
+    exact Or.inl ⟨rfl, hk.2⟩
+  · exact Or.inr rfl
+
+private theorem array_toList (b : String) (i : Int) :
+    (b ++ "[" ++ toString i ++ "]").toList =
+      b.toList ++ '[' :: ((toString i).toList ++ [']']) := by
+  simp [String.toList_append]
+
+private theorem bracket_mem_array (b : String) (i : Int) :
+    '[' ∈ (b ++ "[" ++ toString i ++ "]").toList := by
+  rw [array_toList]; simp
+
+theorem userIdent_injective (reserved : List String) :
+    Function.Injective (userIdent reserved) := by
+  intro s₁ s₂ h
+  rcases userIdent_cases reserved s₁ with ⟨h₁, k₁⟩ | h₁ <;>
+    rcases userIdent_cases reserved s₂ with ⟨h₂, k₂⟩ | h₂ <;> rw [h₁, h₂] at h
+  · exact h
+  · exact absurd (by rw [h, tlu_toList]; rfl) k₁
+  · exact absurd (by rw [← h, tlu_toList]; rfl) k₂
+  · have := congrArg String.toList h
+    simp only [tlu_toList, List.cons.injEq, true_and, escapeIdent, String.toList_ofList] at this
+    exact String.toList_inj.mp (flatMap_escapeChar_injective this)
+
+/-- Any VarName printer built from `userIdent`, `tempIdent` and `base[idx]` is injective. -/
+theorem varNameIdent_injective (reserved : List String) (f : VarName → String)
+    (hu : ∀ s, f (.user s) = userIdent reserved s) (ht : ∀ k, f (.temp k) = tempIdent k)
+    (ha : ∀ b i, f (.array b i) = b ++ "[" ++ toString i ++ "]") :
+    Function.Injective f := by
+  have user_temp : ∀ s k, userIdent reserved s ≠ tempIdent k := fun s k h => by
+    rcases userIdent_cases reserved s with ⟨h₁, k₁⟩ | h₁ <;> rw [h₁] at h
+    · exact k₁ (by rw [h, tempIdent, tlt_toList]; rfl)
+    · have := congrArg String.toList h
+      simp [tempIdent] at this
+  have user_array : ∀ s b i, userIdent reserved s ≠ b ++ "[" ++ toString i ++ "]" :=
+    fun s b i h => bracket_not_mem_of_valid (userIdent_valid reserved s) (h ▸ bracket_mem_array b i)
+  have temp_array : ∀ k b i, tempIdent k ≠ b ++ "[" ++ toString i ++ "]" :=
+    fun k b i h => bracket_not_mem_of_valid (tempIdent_valid k) (h ▸ bracket_mem_array b i)
+  intro v w h
+  cases v <;> cases w <;> simp only [hu, ht, ha] at h
+  · rw [userIdent_injective reserved h]
+  · exact absurd h (user_temp _ _)
+  · exact absurd h (user_array _ _ _)
+  · exact absurd h.symm (user_temp _ _)
+  · have := congrArg String.toList h
+    simp only [tempIdent, tlt_toList, List.cons.injEq, true_and] at this
+    exact congrArg VarName.temp (Nat.repr_injective (String.toList_inj.mp this))
+  · exact absurd h (temp_array _ _ _)
+  · exact absurd h.symm (user_array _ _ _)
+  · exact absurd h.symm (temp_array _ _ _)
+  · have := congrArg String.toList h
+    rw [array_toList, array_toList] at this
+    obtain ⟨hb, hi⟩ := not_mem_split_right
+      (by simpa using bracket_not_mem_int _) (by simpa using bracket_not_mem_int _) this
+    have hi := List.append_inj_left' hi rfl
+    rw [String.toList_inj.mp hb, Int.repr_injective (String.toList_inj.mp hi)]
 
 /-! ## Array Access Helper (N9.1) -/
 

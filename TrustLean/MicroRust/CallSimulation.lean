@@ -37,12 +37,11 @@ theorem stmtToMicroRust_correct_withCalls
     {stmt : Stmt} {oc : Outcome}
     (heval : evalStmt fuel env stmt = some (oc, env'))
     (hb : microRustBridge env mcEnv)
-    (hinj : VarNameInjectiveRust)
     (hoc : oc ≠ .outOfFuel)
     (hwf : WellFormedArrayBasesRust stmt) :
     ∃ mcEnv', evalMicroC_withCalls fenv fuel mcEnv (stmtToMicroRust stmt) = some (oc, mcEnv')
       ∧ microRustBridge env' mcEnv' := by
-  obtain ⟨mcEnv', hmcEval, hb'⟩ := stmtToMicroRust_correct heval hb hinj hoc hwf
+  obtain ⟨mcEnv', hmcEval, hb'⟩ := stmtToMicroRust_correct heval hb hoc hwf
   exact ⟨mcEnv', evalMicroC_to_withCalls fenv _ fuel mcEnv _ hmcEval, hb'⟩
 
 /-! ## Non-Vacuity -/

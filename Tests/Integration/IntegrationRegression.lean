@@ -155,13 +155,13 @@ def T9_complex_index : IO Bool := do
     else s!"[FAIL] T9_complex_index: got '{code}'")
   return ok
 
--- T10: Identifier sanitization (keywords become tl_ prefixed)
+-- T10: Identifier sanitization (keywords become tl_u prefixed)
 def T10_identifier_sanitization : IO Bool := do
-  -- Variable named "int" should become "tl_int"
+  -- Variable named "int" should become "tl_uint"
   let stmt1 := Stmt.assign (.user "int") (.litInt 5)
   let stmt2 := Stmt.assign (.user "for") (.litInt 10)
   let code := stmtToC 0 (Stmt.seq stmt1 stmt2)
-  let ok := containsSub code "tl_int" && containsSub code "tl_for"
+  let ok := containsSub code "tl_uint" && containsSub code "tl_ufor"
   IO.println (if ok then "[PASS] T10_identifier_sanitization"
     else s!"[FAIL] T10_identifier_sanitization: got '{code}'")
   return ok

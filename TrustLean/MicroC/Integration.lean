@@ -63,15 +63,26 @@ theorem for_desugar_compat (init : Stmt) (cond : LowLevelExpr) (step body : Stmt
 
     Demonstrate that gate theorem hypotheses are jointly satisfiable. -/
 
-/-- Non-vacuity for stmtToMicroC_correct: skip case.
-    Shows the theorem's conclusion holds concretely.
-    VarNameInjective is a runtime invariant (varNameToC is not universally injective
-    because sanitizeIdentifier maps "int" and "tl_int" both to "tl_int").
-    We demonstrate the conclusion directly via concrete evaluation. -/
+/-- Non-vacuity for stmtToMicroC_correct: skip case, every hypothesis discharged. -/
 example : ∃ mcEnv',
     evalMicroC 1 MicroCEnv.default (stmtToMicroC Stmt.skip) = some (.normal, mcEnv')
     ∧ microCBridge LowLevelEnv.default mcEnv' :=
-  ⟨MicroCEnv.default, by unfold stmtToMicroC evalMicroC; rfl, microCBridge_default⟩
+  stmtToMicroC_correct (by unfold evalStmt; rfl) microCBridge_default (by decide) trivial
+
+/-- Non-vacuity: assigning to the C keyword `int` (printed `tl_uint`). -/
+example : ∃ mcEnv',
+    evalMicroC 1 MicroCEnv.default (stmtToMicroC (.assign (.user "int") (.litInt 42)))
+      = some (.normal, mcEnv')
+    ∧ microCBridge (LowLevelEnv.default.update (.user "int") (.int 42)) mcEnv' :=
+  stmtToMicroC_correct (by simp [evalStmt_assign]) microCBridge_default (by decide) trivial
+
+/-- Non-vacuity: a store through a well-formed array base. -/
+example : ∃ mcEnv',
+    evalMicroC 1 MicroCEnv.default (stmtToMicroC
+      (.store (.varRef (.user "mem")) (.litInt 0) (.litInt 42))) = some (.normal, mcEnv')
+    ∧ microCBridge (LowLevelEnv.default.update (.array "mem" 0) (.int 42)) mcEnv' :=
+  stmtToMicroC_correct (by simp [evalStmt_store, getArrayName]) microCBridge_default
+    (by decide) varNameToC_mem
 
 /-- Non-vacuity: microCBridge holds for default environments. -/
 example : microCBridge LowLevelEnv.default MicroCEnv.default :=

@@ -56,48 +56,48 @@ namespace TrustLean
 -- 6/12: assign
 #eval do
   let s := stmtToMicroRust (Stmt.assign (.user "x") (.litInt 42))
-  assert! s == MicroCStmt.assign (sanitizeIdentifierRust "x") (.litInt 42)
+  assert! s == MicroCStmt.assign (varNameToRust (.user "x")) (.litInt 42)
 
 -- 7/12: store
 #eval do
   let s := stmtToMicroRust (Stmt.store (.varRef (.user "arr")) (.litInt 0) (.litInt 99))
-  assert! s == MicroCStmt.store (.varRef (sanitizeIdentifierRust "arr")) (.litInt 0) (.litInt 99)
+  assert! s == MicroCStmt.store (.varRef (varNameToRust (.user "arr"))) (.litInt 0) (.litInt 99)
 
 -- 8/12: load
 #eval do
   let s := stmtToMicroRust (Stmt.load (.user "x") (.varRef (.user "arr")) (.litInt 0))
-  assert! s == MicroCStmt.load (sanitizeIdentifierRust "x")
-                     (.varRef (sanitizeIdentifierRust "arr")) (.litInt 0)
+  assert! s == MicroCStmt.load (varNameToRust (.user "x"))
+                     (.varRef (varNameToRust (.user "arr"))) (.litInt 0)
 
 -- 9/12: call
 #eval do
   let s := stmtToMicroRust (Stmt.call (.user "res") "compute" [.varRef (.user "a"), .litInt 5])
-  assert! s == MicroCStmt.call (sanitizeIdentifierRust "res") "compute"
-                     [.varRef (sanitizeIdentifierRust "a"), .litInt 5]
+  assert! s == MicroCStmt.call (varNameToRust (.user "res")) "compute"
+                     [.varRef (varNameToRust (.user "a")), .litInt 5]
 
 -- 10/12: seq
 #eval do
   let s := stmtToMicroRust (Stmt.seq (.assign (.user "x") (.litInt 1))
                                      (.assign (.user "y") (.litInt 2)))
-  assert! s == MicroCStmt.seq (.assign (sanitizeIdentifierRust "x") (.litInt 1))
-                              (.assign (sanitizeIdentifierRust "y") (.litInt 2))
+  assert! s == MicroCStmt.seq (.assign (varNameToRust (.user "x")) (.litInt 1))
+                              (.assign (varNameToRust (.user "y")) (.litInt 2))
 
 -- 11/12: ite
 #eval do
   let s := stmtToMicroRust (Stmt.ite (.binOp .ltOp (.varRef (.user "x")) (.litInt 10))
                                      (.assign (.user "y") (.litInt 1))
                                      (.assign (.user "y") (.litInt 0)))
-  assert! s == MicroCStmt.ite (.binOp .ltOp (.varRef (sanitizeIdentifierRust "x")) (.litInt 10))
-                              (.assign (sanitizeIdentifierRust "y") (.litInt 1))
-                              (.assign (sanitizeIdentifierRust "y") (.litInt 0))
+  assert! s == MicroCStmt.ite (.binOp .ltOp (.varRef (varNameToRust (.user "x"))) (.litInt 10))
+                              (.assign (varNameToRust (.user "y")) (.litInt 1))
+                              (.assign (varNameToRust (.user "y")) (.litInt 0))
 
 -- 12/12: while
 #eval do
   let s := stmtToMicroRust (Stmt.while (.binOp .ltOp (.varRef (.user "i")) (.litInt 10))
                                        (.assign (.user "i") (.binOp .add (.varRef (.user "i")) (.litInt 1))))
-  assert! s == MicroCStmt.while_ (.binOp .ltOp (.varRef (sanitizeIdentifierRust "i")) (.litInt 10))
-                                 (.assign (sanitizeIdentifierRust "i")
-                                   (.binOp .add (.varRef (sanitizeIdentifierRust "i")) (.litInt 1)))
+  assert! s == MicroCStmt.while_ (.binOp .ltOp (.varRef (varNameToRust (.user "i"))) (.litInt 10))
+                                 (.assign (varNameToRust (.user "i"))
+                                   (.binOp .add (.varRef (varNameToRust (.user "i"))) (.litInt 1)))
 
 -- Bonus: for_ (desugared to seq + while_)
 #eval do
@@ -105,13 +105,13 @@ namespace TrustLean
                                       (.binOp .ltOp (.varRef (.user "i")) (.litInt 10))
                                       (.assign (.user "i") (.binOp .add (.varRef (.user "i")) (.litInt 1)))
                                       (.assign (.user "s") (.binOp .add (.varRef (.user "s")) (.varRef (.user "i")))))
-  assert! s == MicroCStmt.seq (.assign (sanitizeIdentifierRust "i") (.litInt 0))
-                    (.while_ (.binOp .ltOp (.varRef (sanitizeIdentifierRust "i")) (.litInt 10))
-                      (.seq (.assign (sanitizeIdentifierRust "s")
-                              (.binOp .add (.varRef (sanitizeIdentifierRust "s"))
-                                           (.varRef (sanitizeIdentifierRust "i"))))
-                            (.assign (sanitizeIdentifierRust "i")
-                              (.binOp .add (.varRef (sanitizeIdentifierRust "i")) (.litInt 1)))))
+  assert! s == MicroCStmt.seq (.assign (varNameToRust (.user "i")) (.litInt 0))
+                    (.while_ (.binOp .ltOp (.varRef (varNameToRust (.user "i"))) (.litInt 10))
+                      (.seq (.assign (varNameToRust (.user "s"))
+                              (.binOp .add (.varRef (varNameToRust (.user "s")))
+                                           (.varRef (varNameToRust (.user "i")))))
+                            (.assign (varNameToRust (.user "i"))
+                              (.binOp .add (.varRef (varNameToRust (.user "i"))) (.litInt 1)))))
 
 /-! ## Section 2: Smoke Tests — microRustToString produces Rust-syntax output
 
@@ -203,17 +203,18 @@ namespace TrustLean
     Demonstrate that the hypotheses of stmtToMicroRust_correct (the GATE theorem)
     are jointly satisfiable by constructing a concrete witness. -/
 
-/-- Non-vacuity for stmtToMicroRust_correct: skip case.
-    All five hypotheses are jointly satisfiable:
-    - heval: evalStmt 1 default .skip = some (.normal, default)
-    - hb: microRustBridge default default
-    - hinj: VarNameInjectiveRust
-    - hoc: .normal ≠ .outOfFuel
-    - hwf: WellFormedArrayBasesRust .skip -/
+/-- Non-vacuity for stmtToMicroRust_correct: skip case, every hypothesis discharged. -/
 example : ∃ mcEnv',
     evalMicroC 1 MicroCEnv.default (stmtToMicroRust Stmt.skip) = some (.normal, mcEnv')
     ∧ microRustBridge LowLevelEnv.default mcEnv' :=
-  ⟨MicroCEnv.default, by unfold stmtToMicroRust evalMicroC; rfl, microRustBridge_default⟩
+  stmtToMicroRust_correct (by unfold evalStmt; rfl) microRustBridge_default (by decide) trivial
+
+/-- Non-vacuity: assigning to the Rust keyword `fn` (printed `tl_ufn`). -/
+example : ∃ mcEnv',
+    evalMicroC 1 MicroCEnv.default (stmtToMicroRust (.assign (.user "fn") (.litInt 42)))
+      = some (.normal, mcEnv')
+    ∧ microRustBridge (LowLevelEnv.default.update (.user "fn") (.int 42)) mcEnv' :=
+  stmtToMicroRust_correct (by simp [evalStmt_assign]) microRustBridge_default (by decide) trivial
 
 /-- Non-vacuity: evalStmt returns Some for concrete programs
     (the heval hypothesis of stmtToMicroRust_correct). -/
@@ -232,17 +233,15 @@ example : Outcome.normal ≠ .outOfFuel := by decide
 example : WellFormedArrayBasesRust Stmt.skip := trivial
 
 /-- Non-vacuity: WellFormedArrayBasesRust is satisfiable on nontrivial programs
-    (programs with store/load, showing sanitizeIdentifierRust "arr" = "arr"). -/
+    (programs with store/load, showing varNameToRust (.user "arr") = "arr"). -/
 example : WellFormedArrayBasesRust
     (Stmt.seq (.store (.varRef (.user "arr")) (.litInt 0) (.litInt 42))
               (.load (.user "x") (.varRef (.user "arr")) (.litInt 0))) := by
   constructor
-  · show WellFormedBaseRust (.varRef (.user "arr"))
-    show sanitizeIdentifierRust "arr" = "arr"
-    native_decide
-  · show WellFormedBaseRust (.varRef (.user "arr"))
-    show sanitizeIdentifierRust "arr" = "arr"
-    native_decide
+  · show varNameToRust (.user "arr") = "arr"
+    decide
+  · show varNameToRust (.user "arr") = "arr"
+    decide
 
 /-- Non-vacuity: stmtToMicroRust_correct applied end-to-end on assign.
     Demonstrates the theorem produces a concrete witness for a non-skip program.
@@ -263,29 +262,26 @@ example : microRustBridge LowLevelEnv.default MicroCEnv.default :=
   microRustBridge_default
 
 /-- Non-vacuity: microRustBridge_update theorem is applicable.
-    We demonstrate the conclusion for a concrete update by applying the theorem
-    with VarNameInjectiveRust (which implies local injectivity). -/
-example (hinj : VarNameInjectiveRust) : microRustBridge
+    We demonstrate the conclusion for a concrete update. -/
+example : microRustBridge
     (LowLevelEnv.default.update (.user "x") (.int 42))
     (MicroCEnv.default.update (varNameToRust (.user "x")) (.int 42)) :=
   microRustBridge_update microRustBridge_default (.user "x") (.int 42)
-    (fun _ h => hinj h)
 
 /-! ## Section 5: Compatibility — stmtToMicroRust vs stmtToMicroC
 
     Both translations target the same MicroCStmt/MicroCExpr AST types.
-    They differ only in identifier sanitization:
-    - MicroRust: sanitizeIdentifierRust (53 Rust keywords)
-    - MicroC: sanitizeIdentifier (C99 keywords)
+    They differ only in the reserved identifiers that force an escape:
+    - MicroRust: rustReservedIdentifiers (53 Rust keywords + prelude)
+    - MicroC: cReservedIdentifiers (C99/C11 keywords + stdint/stdlib)
 
     For identifiers that are safe in both languages (e.g., "x", "arr", "i"),
     the AST output is identical. -/
 
-/-- Compatibility helper: for safe identifiers, both sanitizers agree. -/
+/-- Compatibility helper: for safe identifiers, both mappings agree. -/
 private theorem compat_safe_ident (s : String)
-    (hc : sanitizeIdentifier s = s) (hr : sanitizeIdentifierRust s = s) :
-    varNameToC (.user s) = varNameToRust (.user s) := by
-  simp [varNameToC, varNameToRust, hc, hr]
+    (hc : varNameToC (.user s) = s) (hr : varNameToRust (.user s) = s) :
+    varNameToC (.user s) = varNameToRust (.user s) := hc.trans hr.symm
 
 -- Compatibility: simple identifiers produce identical ASTs
 #eval do
@@ -345,10 +341,10 @@ private theorem compat_safe_ident (s : String)
   let prog : Stmt := .assign (.user "fn") (.litInt 1)
   let mc := stmtToMicroC prog
   let mr := stmtToMicroRust prog
-  -- "fn" is a Rust keyword => sanitizeIdentifierRust "fn" = "tl_fn"
-  -- "fn" is NOT a C keyword => sanitizeIdentifier "fn" = "fn"
+  -- "fn" is a Rust keyword => varNameToRust (.user "fn") = "tl_ufn"
+  -- "fn" is NOT a C keyword => varNameToC (.user "fn") = "fn"
   assert! mc == MicroCStmt.assign "fn" (.litInt 1)
-  assert! mr == MicroCStmt.assign "tl_fn" (.litInt 1)
+  assert! mr == MicroCStmt.assign "tl_ufn" (.litInt 1)
   assert! mc != mr  -- correctly diverges on language-specific keywords
 
 -- Divergence: C keyword "int" triggers different sanitization
@@ -356,9 +352,9 @@ private theorem compat_safe_ident (s : String)
   let prog : Stmt := .assign (.user "int") (.litInt 1)
   let mc := stmtToMicroC prog
   let mr := stmtToMicroRust prog
-  -- "int" is a C keyword => sanitizeIdentifier "int" = "tl_int"
-  -- "int" is NOT a Rust keyword => sanitizeIdentifierRust "int" = "int"
-  assert! mc == MicroCStmt.assign "tl_int" (.litInt 1)
+  -- "int" is a C keyword => varNameToC (.user "int") = "tl_uint"
+  -- "int" is NOT a Rust keyword => varNameToRust (.user "int") = "int"
+  assert! mc == MicroCStmt.assign "tl_uint" (.litInt 1)
   assert! mr == MicroCStmt.assign "int" (.litInt 1)
   assert! mc != mr
 
@@ -366,7 +362,7 @@ private theorem compat_safe_ident (s : String)
     exprToMicroC and exprToMicroRust produce identical ASTs. -/
 theorem expr_compat_safe (e : LowLevelExpr)
     (h : ∀ v : VarName, match v with
-      | .user s => sanitizeIdentifier s = sanitizeIdentifierRust s
+      | .user s => varNameToC (.user s) = varNameToRust (.user s)
       | _ => True) :
     exprToMicroC e = exprToMicroRust e := by
   induction e with
