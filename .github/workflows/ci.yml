@@ -100,6 +100,12 @@ jobs:
       - name: Every emitted C program compiles under clang -Wall -Werror and typed programs compute what evalTyped says
         run: lake env lean --run scripts/CheckTypedC.lean
 
+      - name: A wrong expected value fails the minimal export example
+        run: lake env lean --run examples/Export.lean --self-test
+
+      - name: The minimal export example's C, built with cc -std=c11 -Wall -Werror, prints what ImpStmt.eval computes
+        run: lake env lean --run examples/Export.lean
+
       - name: Planted cast spellings fail the Rust cast harness
         run: lake env lean --run scripts/CheckRustCasts.lean --self-test
 
