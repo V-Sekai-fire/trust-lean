@@ -68,9 +68,10 @@ def cReservedExtra : List String :=
    "size_t", "ptrdiff_t", "bool", "true", "false",
    "NULL", "main", "printf", "malloc", "free", "exit", "abort"]
 
-/-- The macros C11 defines in the headers `generateCHeader` includes: limits.h (5.2.4.2.1),
-    stdint.h (7.20.2-7.20.4), stdbool.h (7.18) and stdlib.h (7.22). A parameter or local with
-    one of these names would expand. -/
+/-- The macros C11 defines in the headers `generateCHeader` includes, other than `bool`, `true`,
+    `false` and `NULL` in `cReservedExtra`: limits.h (5.2.4.2.1), stdint.h (7.20.2-7.20.4),
+    stdbool.h (7.18) and stdlib.h (7.22). A parameter or local with one of these names would
+    expand. -/
 def cHeaderMacros : List String :=
   ["CHAR_BIT", "SCHAR_MIN", "SCHAR_MAX", "UCHAR_MAX", "CHAR_MIN", "CHAR_MAX", "MB_LEN_MAX",
    "SHRT_MIN", "SHRT_MAX", "USHRT_MAX", "INT_MIN", "INT_MAX", "UINT_MAX",
