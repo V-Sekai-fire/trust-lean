@@ -1063,7 +1063,7 @@ MicroRust targets the same imperative subset as MicroC: scalars, arrays, loops, 
 4. **Injectivity**: `varNameToRust_injective` and `varNameToC_injective` (from `varNameIdent_injective` in Common.lean), so neither simulation theorem takes an injectivity hypothesis.
 5. **microRustBridge**: `∀ v, env v = mcEnv (varNameToRust v)`. Same structure as `microCBridge` but with the Rust mapping.
 6. **WellFormedBaseRust**: `varNameToRust (.user name) = name` (vs `varNameToC` for C). `"mem"` prints unchanged in both (`varNameToRust_mem`, `varNameToC_mem`, by `decide`).
-7. **Rust syntax in PrettyPrint/Parser**: No parens `if`/`while`, postfix `as u32 as i64`/`as u32` casts, `as usize` array index, `true`/`false` booleans. Fully parenthesized expressions (same as MicroC).
+7. **Rust syntax in PrettyPrint/Parser**: No parens `if`/`while`, postfix `as i64 as u32 as i64`/`as i64 as u32` casts, `as usize` array index, `true`/`false` booleans. Fully parenthesized expressions (same as MicroC).
 8. **Two independent chains**: Chain A (semantic: Translation → Bridge → Simulation) and Chain B (syntactic: PrettyPrint → Parser → Roundtrip) share no definitions until Integration. Can interleave execution.
 9. **12 modules reused at zero cost**: AST, Eval, FuelMono, Int64, Int64Eval, Int64Agreement, Unsigned, UnsignedEval, UnsignedAgreement, UnsignedFuelMono, CallTypes, CallEval (3,524 LOC, 46% of MicroC).
 

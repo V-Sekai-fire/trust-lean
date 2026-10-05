@@ -6,7 +6,7 @@
   for well-formed expressions satisfying NegLitDisamRust.
 
   Adapted from MicroC/RoundtripExpr.lean with Rust syntax differences:
-  - Cast expressions: postfix `as u32 as i64` / `as u32` instead of prefix C casts
+  - Cast expressions: postfix `as i64 as u32 as i64` / `as i64 as u32` instead of prefix C casts
   - Array access: `base[idx as usize]` instead of `base[idx]`
   - Binary/unary operators and booleans: identical syntax
 
@@ -486,9 +486,11 @@ theorem rustExprDepth_le_length (e : MicroCExpr) (he : WFExprRust e) :
     cases op <;> simp only [microRustExprToString, String.toList_append, List.length_append,
       show "(".toList = ['('] from rfl, show ")".toList = [')'] from rfl,
       show "-".toList = ['-'] from rfl, show "!".toList = ['!'] from rfl,
-      show " as u32 as i64)".toList =
-        [' ', 'a', 's', ' ', 'u', '3', '2', ' ', 'a', 's', ' ', 'i', '6', '4', ')'] from rfl,
-      show " as u32)".toList = [' ', 'a', 's', ' ', 'u', '3', '2', ')'] from rfl,
+      show " as i64 as u32 as i64)".toList =
+        [' ', 'a', 's', ' ', 'i', '6', '4', ' ', 'a', 's', ' ', 'u', '3', '2',
+          ' ', 'a', 's', ' ', 'i', '6', '4', ')'] from rfl,
+      show " as i64 as u32)".toList =
+        [' ', 'a', 's', ' ', 'i', '6', '4', ' ', 'a', 's', ' ', 'u', '3', '2', ')'] from rfl,
       List.length_cons, List.length_nil, List.length_append] <;>
       (have := ih_e; omega)
   | powCall _ _ _ ih_base =>
@@ -538,10 +540,11 @@ private theorem isAlpha_not_digit (c : Char) (h : c.isAlpha = true) : c.isDigit 
 @[simp] private theorem strR_lb : "[".toList = ['['] := rfl
 @[simp] private theorem strR_as_usize_rb : " as usize]".toList =
     [' ', 'a', 's', ' ', 'u', 's', 'i', 'z', 'e', ']'] := rfl
-@[simp] private theorem strR_as_widen_rp : " as u32 as i64)".toList =
-    [' ', 'a', 's', ' ', 'u', '3', '2', ' ', 'a', 's', ' ', 'i', '6', '4', ')'] := rfl
-@[simp] private theorem strR_as_trunc_rp : " as u32)".toList =
-    [' ', 'a', 's', ' ', 'u', '3', '2', ')'] := rfl
+@[simp] private theorem strR_as_widen_rp : " as i64 as u32 as i64)".toList =
+    [' ', 'a', 's', ' ', 'i', '6', '4', ' ', 'a', 's', ' ', 'u', '3', '2',
+      ' ', 'a', 's', ' ', 'i', '6', '4', ')'] := rfl
+@[simp] private theorem strR_as_trunc_rp : " as i64 as u32)".toList =
+    [' ', 'a', 's', ' ', 'i', '6', '4', ' ', 'a', 's', ' ', 'u', '3', '2', ')'] := rfl
 
 /-- pRustExprF on '(' dispatches to pRustParenF. -/
 @[simp] private theorem pRustExprF_paren (k : Nat) (cs : List Char) :
@@ -647,10 +650,11 @@ private theorem pRustParenF_fallthrough (k : Nat) (c : Char) (cs : List Char)
       | some (lhs, rest) =>
         let rest := skipWsR rest
         match rest with
-        | 'a' :: 's' :: ' ' :: 'u' :: '3' :: '2' :: ' ' :: 'a' :: 's' :: ' ' :: 'i' :: '6' :: '4' ::
-            ')' :: final =>
+        | 'a' :: 's' :: ' ' :: 'i' :: '6' :: '4' :: ' ' :: 'a' :: 's' :: ' ' :: 'u' :: '3' :: '2' ::
+            ' ' :: 'a' :: 's' :: ' ' :: 'i' :: '6' :: '4' :: ')' :: final =>
           some (.unaryOp .widen32to64 lhs, final)
-        | 'a' :: 's' :: ' ' :: 'u' :: '3' :: '2' :: ')' :: final =>
+        | 'a' :: 's' :: ' ' :: 'i' :: '6' :: '4' :: ' ' :: 'a' :: 's' :: ' ' :: 'u' :: '3' :: '2' ::
+            ')' :: final =>
           some (.unaryOp .trunc64to32 lhs, final)
         | _ =>
           match pBinOpR rest with
@@ -1233,8 +1237,9 @@ theorem rustExpr_roundtrip_with_rest (e : MicroCExpr) (he : WFExprRust e)
         simp only [List.cons_append]
         rw [skipWsR_nonws c_e _ h_nonws_e]
         rw [pRustParenF_fallthrough k c_e _ h_not_bang_e h_not_neg_e]
-        have h_safe : ExprSafeR (' ' :: 'a' :: 's' :: ' ' :: 'u' :: '3' :: '2' :: ' ' :: 'a' :: 's' ::
-            ' ' :: 'i' :: '6' :: '4' :: ')' :: rest) :=
+        have h_safe : ExprSafeR (' ' :: 'a' :: 's' :: ' ' :: 'i' :: '6' :: '4' ::
+            ' ' :: 'a' :: 's' :: ' ' :: 'u' :: '3' :: '2' ::
+            ' ' :: 'a' :: 's' :: ' ' :: 'i' :: '6' :: '4' :: ')' :: rest) :=
           ⟨Or.inr ⟨' ', _, rfl, by decide⟩,
            Or.inr ⟨' ', _, rfl, by decide, by decide, by decide⟩,
            by intro cs h; simp [skipWsR] at h,
@@ -1257,7 +1262,8 @@ theorem rustExpr_roundtrip_with_rest (e : MicroCExpr) (he : WFExprRust e)
         simp only [List.cons_append]
         rw [skipWsR_nonws c_e _ h_nonws_e]
         rw [pRustParenF_fallthrough k c_e _ h_not_bang_e h_not_neg_e]
-        have h_safe : ExprSafeR (' ' :: 'a' :: 's' :: ' ' :: 'u' :: '3' :: '2' :: ')' :: rest) :=
+        have h_safe : ExprSafeR (' ' :: 'a' :: 's' :: ' ' :: 'i' :: '6' :: '4' ::
+            ' ' :: 'a' :: 's' :: ' ' :: 'u' :: '3' :: '2' :: ')' :: rest) :=
           ⟨Or.inr ⟨' ', _, rfl, by decide⟩,
            Or.inr ⟨' ', _, rfl, by decide, by decide, by decide⟩,
            by intro cs h; simp [skipWsR] at h,

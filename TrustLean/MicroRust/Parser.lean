@@ -7,7 +7,7 @@
   - Array access: `base[idx as usize]` with mandatory `as usize` suffix
   - Store: `base[idx as usize] = val;`
   - Load: `var = base[idx as usize];`
-  - Cast: `(e as u32 as i64)` / `(e as u32)` postfix syntax inside parens
+  - Cast: `(e as i64 as u32 as i64)` / `(e as i64 as u32)` postfix syntax inside parens
   - Booleans: `true`/`false` (same as MicroC)
 
   Key design: pRustExprF/pRustStmtF use Nat fuel for termination.
@@ -168,15 +168,16 @@ where
           | _ => none
         | none => none
     | _ =>
-      -- Either binary op: (lhs op rhs) or cast: (e as u32 as i64) / (e as u32)
+      -- Either binary op: (lhs op rhs) or cast: (e as i64 as u32 as i64) / (e as i64 as u32)
       match pRustExprF fuel cs with
       | some (lhs, rest) =>
         let rest := skipWsR rest
         match rest with
-        | 'a' :: 's' :: ' ' :: 'u' :: '3' :: '2' :: ' ' :: 'a' :: 's' :: ' ' :: 'i' :: '6' :: '4' ::
-            ')' :: final =>
+        | 'a' :: 's' :: ' ' :: 'i' :: '6' :: '4' :: ' ' :: 'a' :: 's' :: ' ' :: 'u' :: '3' :: '2' ::
+            ' ' :: 'a' :: 's' :: ' ' :: 'i' :: '6' :: '4' :: ')' :: final =>
           some (.unaryOp .widen32to64 lhs, final)
-        | 'a' :: 's' :: ' ' :: 'u' :: '3' :: '2' :: ')' :: final =>
+        | 'a' :: 's' :: ' ' :: 'i' :: '6' :: '4' :: ' ' :: 'a' :: 's' :: ' ' :: 'u' :: '3' :: '2' ::
+            ')' :: final =>
           some (.unaryOp .trunc64to32 lhs, final)
         | _ =>
           -- Binary op: (lhs op rhs)
