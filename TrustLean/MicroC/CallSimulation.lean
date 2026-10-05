@@ -163,12 +163,11 @@ theorem stmtToMicroC_correct_withCalls
     {stmt : Stmt} {oc : Outcome}
     (heval : evalStmt fuel env stmt = some (oc, env'))
     (hb : microCBridge env mcEnv)
-    (hinj : VarNameInjective)
     (hoc : oc ≠ .outOfFuel)
     (hwf : WellFormedArrayBases stmt) :
     ∃ mcEnv', evalMicroC_withCalls fenv fuel mcEnv (stmtToMicroC stmt) = some (oc, mcEnv')
       ∧ microCBridge env' mcEnv' := by
-  obtain ⟨mcEnv', hmcEval, hb'⟩ := stmtToMicroC_correct heval hb hinj hoc hwf
+  obtain ⟨mcEnv', hmcEval, hb'⟩ := stmtToMicroC_correct heval hb hoc hwf
   exact ⟨mcEnv', evalMicroC_to_withCalls fenv _ fuel mcEnv _ hmcEval, hb'⟩
 
 /-! ## Non-Vacuity -/

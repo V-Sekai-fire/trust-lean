@@ -118,10 +118,10 @@ theorem store_mem_correct
 /-! ## WellFormedArrayBases for gather/scatter (autopsy fix) -/
 
 open TrustLean in
-/-- memBaseExpr is well-formed (its name "mem" is already a valid C identifier). -/
+/-- memBaseExpr is well-formed (its name "mem" prints unchanged). -/
 theorem wellFormedBase_memBaseExpr : TrustLean.WellFormedBase memBaseExpr := by
   unfold TrustLean.WellFormedBase memBaseExpr memArrayName
-  exact TrustLean.sanitizeIdentifier_mem
+  exact TrustLean.varNameToC_mem
 
 open TrustLean in
 /-- gatherToStmt always produces well-formed array bases

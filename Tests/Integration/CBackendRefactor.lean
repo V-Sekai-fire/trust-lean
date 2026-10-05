@@ -94,19 +94,19 @@ def T5_store_load : IO Bool := do
     else s!"[FAIL] T5_store_load: store={storeOk} load={loadOk}\n  store: '{storeResult}'\n  load: '{loadResult}'")
   return ok
 
--- T6: Variable names that are C keywords are sanitized
+-- T6: Variable names that are C keywords are escaped
 def T6_keyword_sanitization : IO Bool := do
   let stmt := Stmt.assign (.user "int") (.litInt 5)
   let result := stmtToC 0 stmt
-  let ok := containsSub result "tl_int"
+  let ok := containsSub result "tl_uint"
   IO.println (if ok then "[PASS] T6_keyword_sanitization"
     else s!"[FAIL] T6_keyword_sanitization: got '{result}'")
   return ok
 
--- T7: Variable names with invalid C characters are sanitized
+-- T7: Variable names with invalid C characters are escaped
 def T7_invalid_char_sanitization : IO Bool := do
   let result := varNameToC (.user "a-b")
-  let ok := result == "ab"
+  let ok := result == "tl_ua_00002db"
   IO.println (if ok then "[PASS] T7_invalid_char_sanitization"
     else s!"[FAIL] T7_invalid_char_sanitization: got '{result}'")
   return ok

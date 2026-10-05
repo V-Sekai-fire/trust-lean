@@ -12,14 +12,14 @@
   2. sim_while_helper: fuel induction with parameterized body IH
   3. stmtToMicroC_correct: structural induction on Stmt
      - Simple cases inline (skip, break, continue, return, assign, call)
-     - store/load: need WellFormedBase for sanitizeIdentifier bridge
+     - store/load: need WellFormedBase so the array name prints unchanged
      - seq/ite: use sub-IHs
      - while: delegate to sim_while_helper
      - for_: fuel split, init IH + compound seq IH + sim_while_helper + fuel_mono
 
   Key hypotheses:
   - microCBridge env mcEnv (environments agree via varNameToC)
-  - varNameToC injective (well-formed program, no identifier collisions)
+  - none on identifiers: varNameToC_injective proves varNameToC injective
   - WellFormedArrayBases stmt (store/load bases are .user vars with clean names)
 -/
 
@@ -34,13 +34,13 @@ namespace TrustLean
 
 /-! ## Well-formedness conditions -/
 
-/-- Well-formedness: varNameToC is injective on the program's variable names. -/
+/-- varNameToC is injective; `varNameToC_injective` proves it. -/
 abbrev VarNameInjective := Function.Injective varNameToC
 
 /-- A store/load base expression is well-formed if it's a user variable
-    whose name is a valid C identifier (sanitizeIdentifier is identity on it). -/
+    whose name varNameToC prints unchanged. -/
 def WellFormedBase : LowLevelExpr → Prop
-  | .varRef (.user name) => sanitizeIdentifier name = name
+  | .varRef (.user name) => varNameToC (.user name) = name
   | _ => False
 
 /-- All store/load operations in a statement use well-formed bases. -/
@@ -62,11 +62,11 @@ def WellFormedArrayBases : Stmt → Prop
 /-! ## Array bridge helper -/
 
 /-- If getArrayName succeeds and the base is well-formed, then the base is a user
-    variable and sanitizeIdentifier is identity on the name. -/
+    variable whose name varNameToC prints unchanged. -/
 private theorem wf_base_is_user (base : LowLevelExpr) (name : String)
     (hgn : getArrayName base = some name)
     (hwf : WellFormedBase base) :
-    base = .varRef (.user name) ∧ sanitizeIdentifier name = name := by
+    base = .varRef (.user name) ∧ varNameToC (.user name) = name := by
   cases base with
   | varRef v =>
     cases v with
@@ -86,7 +86,7 @@ private theorem wf_base_is_user (base : LowLevelExpr) (name : String)
 /-- Bridge preservation for array updates: updating .array name i in Core
     corresponds to updating (name ++ "[" ++ toString i ++ "]") in MicroC. -/
 private theorem microCBridge_array_update {env : LowLevelEnv} {mcEnv : MicroCEnv}
-    (hb : microCBridge env mcEnv) (hinj : VarNameInjective)
+    (hb : microCBridge env mcEnv)
     (name : String) (i : Int) (v : Value) :
     microCBridge (env.update (.array name i) v)
       (mcEnv.update (name ++ "[" ++ toString i ++ "]") v) := by
@@ -102,7 +102,7 @@ private theorem microCBridge_array_update {env : LowLevelEnv} {mcEnv : MicroCEnv
       have : varNameToC w = varNameToC (.array name i) := by
         show varNameToC w = name ++ "[" ++ toString i ++ "]"
         exact heq
-      exact hinj this
+      exact varNameToC_injective this
     rw [if_neg hw, if_neg hne]; exact hb w
 
 /-! ## While simulation helper -/
@@ -113,26 +113,26 @@ private theorem sim_while_helper
     (cond : LowLevelExpr) (body : Stmt)
     (body_sim : ∀ {fuel : Nat} {env env' : LowLevelEnv} {mcEnv : MicroCEnv} {oc : Outcome},
       evalStmt fuel env body = some (oc, env') →
-      microCBridge env mcEnv → VarNameInjective → oc ≠ .outOfFuel →
+      microCBridge env mcEnv → oc ≠ .outOfFuel →
       WellFormedArrayBases body →
       ∃ mcEnv', evalMicroC fuel mcEnv (stmtToMicroC body) = some (oc, mcEnv')
         ∧ microCBridge env' mcEnv')
     {fuel : Nat} :
     ∀ {env env' : LowLevelEnv} {mcEnv : MicroCEnv} {oc : Outcome},
     evalStmt fuel env (.while cond body) = some (oc, env') →
-    microCBridge env mcEnv → VarNameInjective → oc ≠ .outOfFuel →
+    microCBridge env mcEnv → oc ≠ .outOfFuel →
     WellFormedArrayBases body →
     ∃ mcEnv', evalMicroC fuel mcEnv (.while_ (exprToMicroC cond) (stmtToMicroC body))
       = some (oc, mcEnv') ∧ microCBridge env' mcEnv' := by
   induction fuel with
   | zero =>
-    intro env env' mcEnv oc h _ _ hoc _
+    intro env env' mcEnv oc h _ hoc _
     simp only [evalStmt_while_zero] at h
     have : oc = .outOfFuel := by
       have := Option.some.inj h; exact (congrArg Prod.fst this).symm
     exact absurd this hoc
   | succ n ih_fuel =>
-    intro env env' mcEnv oc h hb hinj hoc hwf
+    intro env env' mcEnv oc h hb hoc hwf
     simp only [evalStmt_while_succ] at h
     simp only [evalMicroC_while_succ]
     -- Bridge the condition: rewrite MicroC condition to Core condition
@@ -165,17 +165,17 @@ private theorem sim_while_helper
             cases ob with
             | normal =>
               -- Body normal → get MicroC body result, then recurse
-              obtain ⟨mcMid, hmcBody, hbMid⟩ := body_sim hbody hb hinj (by simp) hwf
+              obtain ⟨mcMid, hmcBody, hbMid⟩ := body_sim hbody hb (by simp) hwf
               rw [hmcBody]
-              exact ih_fuel h hbMid hinj hoc hwf
+              exact ih_fuel h hbMid hoc hwf
             | continue_ =>
               -- Body continue → same as normal for while
-              obtain ⟨mcMid, hmcBody, hbMid⟩ := body_sim hbody hb hinj (by simp) hwf
+              obtain ⟨mcMid, hmcBody, hbMid⟩ := body_sim hbody hb (by simp) hwf
               rw [hmcBody]
-              exact ih_fuel h hbMid hinj hoc hwf
+              exact ih_fuel h hbMid hoc hwf
             | break_ =>
               -- Body break → while exits with normal
-              obtain ⟨mcMid, hmcBody, hbMid⟩ := body_sim hbody hb hinj (by simp) hwf
+              obtain ⟨mcMid, hmcBody, hbMid⟩ := body_sim hbody hb (by simp) hwf
               rw [hmcBody]
               have := Option.some.inj h
               have hoc_eq : oc = .normal := (congrArg Prod.fst this).symm
@@ -185,7 +185,7 @@ private theorem sim_while_helper
               exact ⟨mcMid, rfl, hbMid⟩
             | return_ rv =>
               -- Body return → while propagates
-              obtain ⟨mcMid, hmcBody, hbMid⟩ := body_sim hbody hb hinj (by simp) hwf
+              obtain ⟨mcMid, hmcBody, hbMid⟩ := body_sim hbody hb (by simp) hwf
               rw [hmcBody]
               have := Option.some.inj h
               have hoc_eq : oc = .return_ rv := (congrArg Prod.fst this).symm
@@ -212,7 +212,6 @@ theorem stmtToMicroC_correct
     {stmt : Stmt} {oc : Outcome}
     (heval : evalStmt fuel env stmt = some (oc, env'))
     (hb : microCBridge env mcEnv)
-    (hinj : VarNameInjective)
     (hoc : oc ≠ .outOfFuel)
     (hwf : WellFormedArrayBases stmt) :
     ∃ mcEnv', evalMicroC fuel mcEnv (stmtToMicroC stmt) = some (oc, mcEnv')
@@ -279,7 +278,7 @@ theorem stmtToMicroC_correct
         have := congrArg Prod.snd this; simp at this; exact this.symm
       subst hoc_eq; subst henv_eq
       exact ⟨mcEnv.update (varNameToC name) v, rfl,
-        microCBridge_update hb name v (fun w h => hinj h)⟩
+        microCBridge_update hb name v⟩
   | store base idx val =>
     simp only [evalStmt_store] at heval
     -- Extract getArrayName result from heval
@@ -287,7 +286,7 @@ theorem stmtToMicroC_correct
     cases gn with
     | none => simp at heval
     | some name =>
-      -- WellFormedBase gives us: base = .varRef (.user name) ∧ sanitizeIdentifier name = name
+      -- WellFormedBase gives us: base = .varRef (.user name) ∧ varNameToC (.user name) = name
       obtain ⟨hbase_eq, hsn⟩ := wf_base_is_user base name hgn hwf
       subst hbase_eq
       -- Bridge idx and val expressions
@@ -295,7 +294,8 @@ theorem stmtToMicroC_correct
       have hval := exprToMicroC_bridge env mcEnv val hb
       -- Simplify MicroC side
       simp only [stmtToMicroC_store, exprToMicroC_varRef]
-      simp only [evalMicroC, getMicroCArrayName, varNameToC, hsn]
+      rw [hsn]
+      simp only [evalMicroC, getMicroCArrayName]
       rw [← hidx, ← hval]
       generalize hei : evalExpr env idx = ei at heval ⊢
       cases ei with
@@ -315,7 +315,7 @@ theorem stmtToMicroC_correct
               have := congrArg Prod.snd this; simp at this; exact this.symm
             subst hoc_eq; subst henv_eq
             exact ⟨mcEnv.update (name ++ "[" ++ toString i ++ "]") vv, rfl,
-              microCBridge_array_update hb hinj name i vv⟩
+              microCBridge_array_update hb name i vv⟩
   | load var base idx =>
     simp only [evalStmt_load] at heval
     generalize hgn : getArrayName base = gn at heval
@@ -326,7 +326,8 @@ theorem stmtToMicroC_correct
       subst hbase_eq
       have hidx := exprToMicroC_bridge env mcEnv idx hb
       simp only [stmtToMicroC_load, exprToMicroC_varRef]
-      simp only [evalMicroC, getMicroCArrayName, varNameToC, hsn]
+      rw [hsn]
+      simp only [evalMicroC, getMicroCArrayName]
       rw [← hidx]
       generalize hei : evalExpr env idx = ei at heval ⊢
       cases ei with
@@ -351,7 +352,7 @@ theorem stmtToMicroC_correct
             exact this
           refine ⟨mcEnv.update (varNameToC var) (mcEnv (name ++ "[" ++ toString i ++ "]")), rfl, ?_⟩
           rw [← hval_bridge]
-          exact microCBridge_update hb var (env (.array name i)) (fun w h => hinj h)
+          exact microCBridge_update hb var (env (.array name i))
   | call result fname args =>
     simp only [evalStmt_call] at heval
     exact absurd heval (by simp)
@@ -420,9 +421,9 @@ theorem stmtToMicroC_correct
         | false => exact ih_else heval hb hoc hwf_else
   | «while» cond body ih_body =>
     exact sim_while_helper cond body
-      (fun {f} {e} {e'} {me} {o} he hbe _hinj hoe hwe =>
+      (fun {f} {e} {e'} {me} {o} he hbe hoe hwe =>
         ih_body he hbe hoe hwe)
-      heval hb hinj hoc hwf
+      heval hb hoc hwf
   | for_ init cond step body ih_init ih_step ih_body =>
     obtain ⟨hwf_init, hwf_body, hwf_step⟩ := hwf
     cases fuel with
@@ -454,11 +455,11 @@ theorem stmtToMicroC_correct
           -- Build compound body IH for (.seq body step)
           have seq_sim : ∀ {f : Nat} {e e' : LowLevelEnv} {me : MicroCEnv} {o : Outcome},
               evalStmt f e (.seq body step) = some (o, e') →
-              microCBridge e me → VarNameInjective → o ≠ .outOfFuel →
+              microCBridge e me → o ≠ .outOfFuel →
               WellFormedArrayBases (.seq body step) →
               ∃ me', evalMicroC f me (stmtToMicroC (.seq body step)) = some (o, me')
                 ∧ microCBridge e' me' := by
-            intro f e e' me o he hbe _h hoe hwe
+            intro f e e' me o he hbe hoe hwe
             obtain ⟨hwb, hws⟩ := hwe
             -- This IS the seq case of the master theorem applied to body and step
             simp only [evalStmt_seq] at he
@@ -507,7 +508,7 @@ theorem stmtToMicroC_correct
                 exact absurd this hoe
           -- Use sim_while_helper at fuel n with compound seq IH
           have while_at_n := sim_while_helper cond (.seq body step) seq_sim
-            heval hbInit hinj hoc ⟨hwf_body, hwf_step⟩
+            heval hbInit hoc ⟨hwf_body, hwf_step⟩
           -- Get MicroC result at fuel n
           obtain ⟨mcFinal, hmcWhile_n, hbFinal⟩ := while_at_n
           -- Boost while from fuel n to n+1 via fuel_mono
@@ -536,7 +537,7 @@ theorem stmtToMicroC_correct
 
 /-! ## WellFormedArrayBases: key fact (autopsy fix) -/
 
-/-- "mem" is already a valid C identifier (sanitizeIdentifier is identity). -/
-theorem sanitizeIdentifier_mem : sanitizeIdentifier "mem" = "mem" := by native_decide
+/-- "mem" prints unchanged as a C identifier. -/
+theorem varNameToC_mem : varNameToC (.user "mem") = "mem" := by decide
 
 end TrustLean

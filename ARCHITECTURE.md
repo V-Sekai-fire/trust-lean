@@ -1059,10 +1059,10 @@ MicroRust targets the same imperative subset as MicroC: scalars, arrays, loops, 
 
 1. **Shared AST (no rename)**: `MicroCStmt`/`MicroCExpr`/`MicroCEnv` and ALL evaluators (`evalMicroC`, `evalMicroC_int64`, `evalMicroC_uint32/64`, `evalMicroC_withCalls`) are language-neutral. Rust wrapping arithmetic = MicroC wrapping arithmetic (verified: both use `wrapInt64`/`wrapUInt32`/`wrapUInt64`). MicroRust imports these directly. Type aliases `MicroRustStmt := MicroCStmt` etc. in `Defs.lean` for readability.
 2. **TrustLean/MicroRust/ directory**: New files for Rust-specific layers. Imports `TrustLean.MicroC.*` for shared infrastructure. No MicroC files modified.
-3. **varNameToRust**: Uses `sanitizeIdentifierRust` (53 Rust keywords, `_tl_` prefix). Proven not_keyword, nonempty, valid, idempotent in Common.lean (v3.2).
-4. **VarNameInjectiveRust**: Same pattern as MicroC — assumed as hypothesis in simulation, not proved universally. `sanitizeIdentifierRust` is non-injective (L-616) but injective on practical variable sets.
-5. **microRustBridge**: `∀ v, env v = mcEnv (varNameToRust v)`. Same structure as `microCBridge` but with Rust sanitizer.
-6. **WellFormedBaseRust**: `sanitizeIdentifierRust name = name` (vs `sanitizeIdentifier` for C). Both `"mem"` passes both sanitizers (verified by `native_decide`).
+3. **varNameToRust**: The `varNameToC` scheme over `rustReservedIdentifiers`: a valid user name that is not reserved and does not start with `tl_` prints unchanged, every other user name prints `tl_u` plus an injective escape, temps print `tl_t<k>`, array elements print `base[idx]`.
+4. **Injectivity**: `varNameToRust_injective` and `varNameToC_injective` (from `varNameIdent_injective` in Common.lean), so neither simulation theorem takes an injectivity hypothesis.
+5. **microRustBridge**: `∀ v, env v = mcEnv (varNameToRust v)`. Same structure as `microCBridge` but with the Rust mapping.
+6. **WellFormedBaseRust**: `varNameToRust (.user name) = name` (vs `varNameToC` for C). `"mem"` prints unchanged in both (`varNameToRust_mem`, `varNameToC_mem`, by `decide`).
 7. **Rust syntax in PrettyPrint/Parser**: No parens `if`/`while`, postfix `as i64`/`as i32` casts, `as usize` array index, `true`/`false` booleans. Fully parenthesized expressions (same as MicroC).
 8. **Two independent chains**: Chain A (semantic: Translation → Bridge → Simulation) and Chain B (syntactic: PrettyPrint → Parser → Roundtrip) share no definitions until Integration. Can interleave execution.
 9. **12 modules reused at zero cost**: AST, Eval, FuelMono, Int64, Int64Eval, Int64Agreement, Unsigned, UnsignedEval, UnsignedAgreement, UnsignedFuelMono, CallTypes, CallEval (3,524 LOC, 46% of MicroC).

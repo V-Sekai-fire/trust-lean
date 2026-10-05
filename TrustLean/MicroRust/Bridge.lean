@@ -30,17 +30,16 @@ theorem microRustBridge_default :
     microRustBridge LowLevelEnv.default MicroCEnv.default := by
   intro v; rfl
 
-/-- Bridge is preserved by updating the same variable (requires local injectivity). -/
+/-- Bridge is preserved by updating the same variable. -/
 theorem microRustBridge_update {env : LowLevelEnv} {mcEnv : MicroRustEnv}
-    (hb : microRustBridge env mcEnv) (name : VarName) (v : Value)
-    (hinj : ∀ w, varNameToRust w = varNameToRust name → w = name) :
+    (hb : microRustBridge env mcEnv) (name : VarName) (v : Value) :
     microRustBridge (env.update name v) (mcEnv.update (varNameToRust name) v) := by
   intro w
   unfold microRustBridge at hb
   simp only [LowLevelEnv.update, MicroCEnv.update]
   by_cases hw : w = name
   · subst hw; simp
-  · have hne : varNameToRust w ≠ varNameToRust name := fun h => hw (hinj w h)
+  · have hne : varNameToRust w ≠ varNameToRust name := fun h => hw (varNameToRust_injective h)
     simp [hw, hne, hb w]
 
 /-! ## Operator Bridge Lemmas -/
@@ -106,11 +105,11 @@ theorem exprToMicroRust_bridge (env : LowLevelEnv) (mcEnv : MicroRustEnv)
 /-! ## Array Name Bridge -/
 
 /-- Specialized: for user variable array bases,
-    the MicroRust array name is sanitizeIdentifierRust of the Core name. -/
+    the MicroRust array name is the Rust identifier of the Core name. -/
 theorem getArrayName_user_bridge_rust (name : String) :
     getMicroCArrayName (exprToMicroRust (.varRef (.user name))) =
-      some (sanitizeIdentifierRust name) := by
-  simp [exprToMicroRust, getMicroCArrayName, varNameToRust]
+      some (varNameToRust (.user name)) := by
+  simp [exprToMicroRust, getMicroCArrayName]
 
 /-- getArrayName correspondence for MicroRust. -/
 theorem getArrayName_bridge_rust (base : LowLevelExpr)
@@ -121,7 +120,7 @@ theorem getArrayName_bridge_rust (base : LowLevelExpr)
     cases v with
     | user s => exact ⟨_, getArrayName_user_bridge_rust s⟩
     | array s idx =>
-      simp only [exprToMicroRust, getMicroCArrayName, varNameToRust, varNameToStr]
+      simp only [exprToMicroRust, getMicroCArrayName, varNameToRust]
       exact ⟨_, rfl⟩
     | temp _ => simp [getArrayName] at h
   | _ => simp [getArrayName] at h

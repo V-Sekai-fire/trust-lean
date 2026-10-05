@@ -8,11 +8,8 @@
   - Expression evaluation bridge (evalExpr = evalMicroCExpr ∘ exprToMicroC)
 
   The bridge connects VarName-keyed environments (Core IR) to
-  String-keyed environments (MicroC) via varNameToC.
-
-  Well-formedness hypothesis: varNameToC must be injective on the
-  VarNames used in the program. This excludes pathological cases like
-  a user variable named "t0" (which would collide with temp 0).
+  String-keyed environments (MicroC) via varNameToC, which is injective
+  (varNameToC_injective).
 -/
 
 import TrustLean.MicroC.Translation
@@ -38,17 +35,16 @@ theorem microCBridge_default :
     microCBridge LowLevelEnv.default MicroCEnv.default := by
   intro v; rfl
 
-/-- Bridge is preserved by updating the same variable (requires local injectivity). -/
+/-- Bridge is preserved by updating the same variable. -/
 theorem microCBridge_update {env : LowLevelEnv} {mcEnv : MicroCEnv}
-    (hb : microCBridge env mcEnv) (name : VarName) (v : Value)
-    (hinj : ∀ w, varNameToC w = varNameToC name → w = name) :
+    (hb : microCBridge env mcEnv) (name : VarName) (v : Value) :
     microCBridge (env.update name v) (mcEnv.update (varNameToC name) v) := by
   intro w
   unfold microCBridge at hb
   simp only [LowLevelEnv.update, MicroCEnv.update]
   by_cases hw : w = name
   · subst hw; simp
-  · have hne : varNameToC w ≠ varNameToC name := fun h => hw (hinj w h)
+  · have hne : varNameToC w ≠ varNameToC name := fun h => hw (varNameToC_injective h)
     simp [hw, hne, hb w]
 
 /-! ## Operator Bridge Lemmas -/
@@ -114,11 +110,11 @@ theorem exprToMicroC_bridge (env : LowLevelEnv) (mcEnv : MicroCEnv)
 /-! ## Array Name Bridge -/
 
 /-- Specialized: for user variable array bases (the common case),
-    the MicroC array name is sanitizeIdentifier of the Core name. -/
+    the MicroC array name is the C identifier of the Core name. -/
 theorem getArrayName_user_bridge (name : String) :
     getMicroCArrayName (exprToMicroC (.varRef (.user name))) =
-      some (sanitizeIdentifier name) := by
-  simp [exprToMicroC, getMicroCArrayName, varNameToC]
+      some (varNameToC (.user name)) := by
+  simp [exprToMicroC, getMicroCArrayName]
 
 /-- getArrayName correspondence: if Core's getArrayName extracts a name
     from base, then getMicroCArrayName extracts a corresponding name
@@ -131,7 +127,7 @@ theorem getArrayName_bridge (base : LowLevelExpr)
     cases v with
     | user s => exact ⟨_, getArrayName_user_bridge s⟩
     | array s idx =>
-      simp only [exprToMicroC, getMicroCArrayName, varNameToC, varNameToStr]
+      simp only [exprToMicroC, getMicroCArrayName, varNameToC]
       exact ⟨_, rfl⟩
     | temp _ => simp [getArrayName] at h
   | _ => simp [getArrayName] at h

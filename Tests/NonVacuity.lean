@@ -103,22 +103,17 @@ example : evalMicroC_uint64 7 MicroCEnv.default .skip = some (.normal, MicroCEnv
     stmtToMicroC_correct {fuel env env' mcEnv stmt oc}
       (heval : evalStmt fuel env stmt = some (oc, env'))
       (hb : microCBridge env mcEnv)
-      (hinj : VarNameInjective)
       (hoc : oc ≠ .outOfFuel)
       (hwf : WellFormedArrayBases stmt)
     : ∃ mcEnv', evalMicroC fuel mcEnv (stmtToMicroC stmt) = some (oc, mcEnv')
         ∧ microCBridge env' mcEnv'
 
-  Witness: skip with default environments.
-  Note: VarNameInjective (= Function.Injective varNameToC) is not universally
-  provable because sanitizeIdentifier is not injective on all inputs.
-  We demonstrate the conclusion directly via concrete evaluation, which is
-  the approach used in Integration.lean as well.
+  Witness: the theorem applied to skip with default environments.
 -/
 example : ∃ mcEnv',
     evalMicroC 0 MicroCEnv.default (stmtToMicroC .skip) = some (.normal, mcEnv')
     ∧ microCBridge LowLevelEnv.default mcEnv' :=
-  ⟨MicroCEnv.default, by simp [stmtToMicroC], microCBridge_default⟩
+  stmtToMicroC_correct (by simp) microCBridge_default (by decide) trivial
 
 /-! ## 7. ImpStmt.compile_correct
 

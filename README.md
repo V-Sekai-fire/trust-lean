@@ -28,7 +28,7 @@ Trust-Lean provides a **verified backend** for DSL-to-C/Rust compilation. Most v
 **What makes Trust-Lean different:**
 - **Typeclass extensibility**: new frontends and backends only need to implement `CodeGenerable` + `CodeGenSound` — the pipeline and proofs compose automatically
 - **Fuel-based semantics**: `evalStmt_fuel_mono` (fuel monotonicity) is the gate theorem that unlocks all downstream proofs without well-founded recursion complexity
-- **Industrial C backend**: sanitized identifiers (idempotent, keyword-safe, valid C), balanced braces on all 12 `Stmt` constructors, auto-generated headers
+- **Industrial C backend**: injective identifiers (`varNameToC_injective`; keyword-safe, valid C), balanced braces on all 12 `Stmt` constructors, auto-generated headers
 - **AMO-Lean integration**: verified bridge from `ExpandedSigma` to `Stmt` with simulation diagram proof, enabling verified compilation of optimized cryptographic code
 
 ## How It Works
@@ -65,7 +65,7 @@ DSL Frontends          Core IR              Backends
 - **ArithExpr Frontend** — Arithmetic expressions with verified `compile_correct` theorem
 - **BoolExpr Frontend** — Boolean logic with short-circuit semantics, De Morgan's laws verified
 - **ImpStmt Frontend** — Imperative statements with control flow (while, for, break, continue, return)
-- **C Backend** — Industrial-grade: sanitized identifiers (idempotent, keyword-safe), balanced braces, auto-headers (stdint.h, stdbool.h)
+- **C Backend** — Industrial-grade: injective, keyword-safe identifiers, balanced braces, auto-headers (stdint.h, stdbool.h)
 - **Rust Backend** — Balanced braces, control flow keywords, configurable integer types
 - **AMO-Lean Bridge** — `ExpandedSigma -> Stmt` with `expandedSigmaToStmt_correct` simulation diagram (26 theorems, 0 sorry)
 - **Typeclass System** — `CodeGenerable` (compilation), `CodeGenSound` (3-part verification contract), `BackendEmitter` (emission)
@@ -84,6 +84,9 @@ grep -r "sorry" TrustLean/ --include="*.lean" | wc -l  # should be 0
 
 # Fail unless every gate theorem depends only on propext, Classical.choice, Quot.sound
 lake env lean --run scripts/CheckAxioms.lean
+
+# Fail unless the proof that VarNameInjective is false stops compiling
+lake env lean --run scripts/CheckVacuity.lean
 
 # Run integration tests
 lake env lean TrustLean/Tests/Integration.lean

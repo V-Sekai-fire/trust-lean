@@ -17,19 +17,19 @@ namespace TrustLean.Tests.Properties.CBackendRefactor
 -- NOT_YET_RUNNABLE for universal quantifier (no SampleableExt for VarName)
 -- Testing with representative examples and the formally proved theorem
 
--- varNameToC for .user applies sanitizeIdentifier which is formally proved
--- to never produce a keyword (sanitizeIdentifier_not_keyword).
--- For .temp and .array, output is structurally safe ("tN", "base[idx]").
+-- varNameToC keeps a valid, non-reserved .user name outside the tl_ namespace and
+-- prints every other one as tl_u plus its escape; temps print tl_tN, arrays base[idx].
 
 -- Verify .user cases via exact value checks
-example : varNameToC (.user "while") = "tl_while" := by decide
-example : varNameToC (.user "for") = "tl_for" := by decide
-example : varNameToC (.user "int") = "tl_int" := by decide
+example : varNameToC (.user "while") = "tl_uwhile" := by decide
+example : varNameToC (.user "for") = "tl_ufor" := by decide
+example : varNameToC (.user "int") = "tl_uint" := by decide
+example : varNameToC (.user "tl_int") = "tl_utl_00005fint" := by decide
 example : varNameToC (.user "x") = "x" := by decide
 
 -- Verify .temp cases
-example : varNameToC (.temp 0) = "t0" := by decide
-example : varNameToC (.temp 5) = "t5" := by decide
+example : varNameToC (.temp 0) = "tl_t0" := by decide
+example : varNameToC (.temp 5) = "tl_t5" := by decide
 
 -- Verify .array cases
 example : varNameToC (.array "mem" 3) = "mem[3]" := by decide
@@ -75,25 +75,27 @@ example : isValidCIdent (varNameToC (.user "hello")) = true := by decide
   else
     IO.println s!"P2 INVARIANT: FAIL on {failures}"
 
-/-! ## P3 — P1 IDEMPOTENCY: varNameToC(.user) is idempotent -/
+/-! ## P3 — P0 INJECTIVITY: distinct variables print distinctly (varNameToC_injective) -/
 
-example : sanitizeIdentifier (sanitizeIdentifier "while") = sanitizeIdentifier "while" := by decide
-example : sanitizeIdentifier (sanitizeIdentifier "int") = sanitizeIdentifier "int" := by decide
-example : sanitizeIdentifier (sanitizeIdentifier "hello") = sanitizeIdentifier "hello" := by decide
+example : varNameToC (.user "int") ≠ varNameToC (.user "tl_int") := by decide
+example : varNameToC (.temp 0) ≠ varNameToC (.user "t0") := by decide
+example : varNameToC (.user "tl_t0") ≠ varNameToC (.temp 0) := by decide
+example : varNameToC (.user "a[1]") ≠ varNameToC (.array "a" 1) := by decide
 
 #eval show IO Unit from do
-  let inputs := ["while", "for", "int", "2bad", "", "a-b", "tl_x", "_x", "main",
-                  "void", "!@#$%^", "v*o*i*d", "my_variable_name"]
+  let names : List VarName :=
+    (["while", "for", "int", "tl_int", "2bad", "", "a-b", "a_b", "tl_x", "_x", "main",
+      "void", "!@#$%^", "v*o*i*d", "my_variable_name", "t0", "tl_t0", "tl_u", "a[1]"].map .user) ++
+    [.temp 0, .temp 1, .temp 10, .array "a" 1, .array "a" (-1), .array "a[1" 1]
   let mut failures := #[]
-  for s in inputs do
-    let once := varNameToC (.user s)
-    let twice := varNameToC (.user once)
-    if twice != once then
-      failures := failures.push s
+  for v in names do
+    for w in names do
+      if v != w && varNameToC v == varNameToC w then
+        failures := failures.push (varNameToC v)
   if failures.isEmpty then
-    IO.println s!"P3 IDEMPOTENCY: PASS (all {inputs.length} samples)"
+    IO.println s!"P3 INJECTIVITY: PASS (all {names.length * names.length} pairs)"
   else
-    IO.println s!"P3 IDEMPOTENCY: FAIL on {failures}"
+    IO.println s!"P3 INJECTIVITY: FAIL on {failures}"
 
 /-! ## P4 — P0 INVARIANT: stmtToC balanced braces -/
 -- Formal theorem not available for general case (would need structural induction

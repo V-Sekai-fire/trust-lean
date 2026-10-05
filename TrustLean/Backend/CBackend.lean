@@ -56,12 +56,18 @@ def unaryOpToC : UnaryOp → String
 
 /-! ## C-Safe Variable Names (N9.2) -/
 
-/-- Convert VarName to a C-safe identifier string.
-    Applies sanitizeIdentifier to user variables to avoid C keyword collisions.
-    Temps and array accesses are structurally safe by construction. -/
+/-- Convert VarName to a C identifier string. Valid user names that are not C-reserved
+    and do not start with `tl_` print unchanged; temps print `tl_t<k>`; every other
+    user name prints `tl_u` and its escape; array elements print `base[idx]`. -/
 def varNameToC : VarName → String
-  | .user s => sanitizeIdentifier s
-  | v => varNameToStr v
+  | .user s => userIdent cReservedIdentifiers s
+  | .temp k => tempIdent k
+  | .array base idx => base ++ "[" ++ toString idx ++ "]"
+
+/-- Distinct variables print to distinct C identifiers. -/
+theorem varNameToC_injective : Function.Injective varNameToC :=
+  varNameIdent_injective cReservedIdentifiers varNameToC
+    (fun _ => rfl) (fun _ => rfl) (fun _ _ => rfl)
 
 /-! ## Expression Emission -/
 
@@ -83,7 +89,7 @@ def exprToC : LowLevelExpr → String
 
 /-- Convert a Stmt to C source code at the given indentation level.
     Handles all 12 Stmt constructors. Mandatory braces on all control flow.
-    All identifiers sanitized via varNameToC. -/
+    Variables print via varNameToC. -/
 def stmtToC (level : Nat) : Stmt → String
   | .skip => ""
   | .assign name expr =>
@@ -141,13 +147,13 @@ def stmtToC (level : Nat) : Stmt → String
 
 /-! ## Function Generation -/
 
-/-- Build a comma-separated C parameter list with sanitized names.
-    Each pair is (name, type), e.g., ("x", "int64_t"). -/
+/-- Build a comma-separated C parameter list, each name printed as the body prints
+    that user variable. Each pair is (name, type), e.g., ("x", "int64_t"). -/
 private def buildParamList (params : List (String × String)) : String :=
-  ", ".intercalate (params.map fun (n, t) => t ++ " " ++ sanitizeIdentifier n)
+  ", ".intercalate (params.map fun (n, t) => t ++ " " ++ varNameToC (.user n))
 
 /-- Generate a complete C function wrapping a statement body and return expression.
-    Function name and parameter names are sanitized. -/
+    The function name is sanitized; parameter names print via varNameToC. -/
 def generateCFunction (cfg : CConfig) (funcName : String)
     (params : List (String × String)) (body : Stmt) (result : LowLevelExpr) : String :=
   let safeName := sanitizeIdentifier funcName

@@ -4,7 +4,7 @@
 
   N24.1 (v4.0.0): FUND — MicroRust reuses the language-neutral MicroC AST
   and evaluators. This file provides readability aliases and the Rust-specific
-  identifier mapping (varNameToRust using sanitizeIdentifierRust).
+  identifier mapping (varNameToRust over rustReservedIdentifiers).
 -/
 
 import TrustLean.MicroC.AST
@@ -26,12 +26,17 @@ abbrev MicroRustUnaryOp := MicroCUnaryOp
 
 /-! ## Rust-Specific Identifier Mapping -/
 
-/-- Map a VarName to a Rust-safe string identifier.
-    Uses sanitizeIdentifierRust for user variables (53 Rust keywords protected).
-    Temp and array variables use the shared varNameToStr. -/
+/-- Map a VarName to a Rust identifier string, with the same scheme as `varNameToC`
+    over the Rust reserved identifiers. -/
 def varNameToRust : VarName → String
-  | .user s => sanitizeIdentifierRust s
-  | v => varNameToStr v
+  | .user s => userIdent rustReservedIdentifiers s
+  | .temp k => tempIdent k
+  | .array base idx => base ++ "[" ++ toString idx ++ "]"
+
+/-- Distinct variables print to distinct Rust identifiers. -/
+theorem varNameToRust_injective : Function.Injective varNameToRust :=
+  varNameIdent_injective rustReservedIdentifiers varNameToRust
+    (fun _ => rfl) (fun _ => rfl) (fun _ _ => rfl)
 
 /-- BinOp mapping to MicroRust uses the same MicroC mapping (operators are identical). -/
 abbrev binOpToMicroRust := binOpToMicroC
@@ -42,10 +47,10 @@ abbrev unaryOpToMicroRust := unaryOpToMicroC
 /-! ## varNameToRust @[simp] Equation Lemmas -/
 
 @[simp] theorem varNameToRust_user (s : String) :
-    varNameToRust (.user s) = sanitizeIdentifierRust s := rfl
+    varNameToRust (.user s) = userIdent rustReservedIdentifiers s := rfl
 
 @[simp] theorem varNameToRust_temp (n : Nat) :
-    varNameToRust (.temp n) = varNameToStr (.temp n) := rfl
+    varNameToRust (.temp n) = tempIdent n := rfl
 
 @[simp] theorem varNameToRust_array (s : String) (n : Nat) :
     varNameToRust (.array s n) = varNameToStr (.array s n) := rfl

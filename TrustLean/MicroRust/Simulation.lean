@@ -12,14 +12,14 @@
   2. sim_while_helper_rust: fuel induction with parameterized body IH
   3. stmtToMicroRust_correct: structural induction on Stmt
      - Simple cases inline (skip, break, continue, return, assign, call)
-     - store/load: need WellFormedBaseRust for sanitizeIdentifierRust bridge
+     - store/load: need WellFormedBaseRust so the array name prints unchanged
      - seq/ite: use sub-IHs
      - while: delegate to sim_while_helper_rust
      - for_: fuel split, init IH + compound seq IH + sim_while_helper_rust + fuel_mono
 
   Key hypotheses:
   - microRustBridge env mcEnv (environments agree via varNameToRust)
-  - varNameToRust injective (well-formed program, no identifier collisions)
+  - none on identifiers: varNameToRust_injective proves varNameToRust injective
   - WellFormedArrayBasesRust stmt (store/load bases are .user vars with clean names)
 -/
 
@@ -34,13 +34,13 @@ namespace TrustLean
 
 /-! ## Well-formedness conditions -/
 
-/-- Well-formedness: varNameToRust is injective on the program's variable names. -/
+/-- varNameToRust is injective; `varNameToRust_injective` proves it. -/
 abbrev VarNameInjectiveRust := Function.Injective varNameToRust
 
 /-- A store/load base expression is well-formed if it's a user variable
-    whose name is a valid Rust identifier (sanitizeIdentifierRust is identity on it). -/
+    whose name varNameToRust prints unchanged. -/
 def WellFormedBaseRust : LowLevelExpr → Prop
-  | .varRef (.user name) => sanitizeIdentifierRust name = name
+  | .varRef (.user name) => varNameToRust (.user name) = name
   | _ => False
 
 /-- All store/load operations in a statement use well-formed bases. -/
@@ -62,11 +62,11 @@ def WellFormedArrayBasesRust : Stmt → Prop
 /-! ## Array bridge helper -/
 
 /-- If getArrayName succeeds and the base is well-formed, then the base is a user
-    variable and sanitizeIdentifierRust is identity on the name. -/
+    variable whose name varNameToRust prints unchanged. -/
 private theorem wf_base_is_user_rust (base : LowLevelExpr) (name : String)
     (hgn : getArrayName base = some name)
     (hwf : WellFormedBaseRust base) :
-    base = .varRef (.user name) ∧ sanitizeIdentifierRust name = name := by
+    base = .varRef (.user name) ∧ varNameToRust (.user name) = name := by
   cases base with
   | varRef v =>
     cases v with
@@ -86,7 +86,7 @@ private theorem wf_base_is_user_rust (base : LowLevelExpr) (name : String)
 /-- Bridge preservation for array updates: updating .array name i in Core
     corresponds to updating (name ++ "[" ++ toString i ++ "]") in MicroRust. -/
 private theorem microRustBridge_array_update {env : LowLevelEnv} {mcEnv : MicroRustEnv}
-    (hb : microRustBridge env mcEnv) (hinj : VarNameInjectiveRust)
+    (hb : microRustBridge env mcEnv)
     (name : String) (i : Int) (v : Value) :
     microRustBridge (env.update (.array name i) v)
       (mcEnv.update (name ++ "[" ++ toString i ++ "]") v) := by
@@ -102,7 +102,7 @@ private theorem microRustBridge_array_update {env : LowLevelEnv} {mcEnv : MicroR
       have : varNameToRust w = varNameToRust (.array name i) := by
         show varNameToRust w = name ++ "[" ++ toString i ++ "]"
         exact heq
-      exact hinj this
+      exact varNameToRust_injective this
     rw [if_neg hw, if_neg hne]; exact hb w
 
 /-! ## While simulation helper -/
@@ -113,26 +113,26 @@ private theorem sim_while_helper_rust
     (cond : LowLevelExpr) (body : Stmt)
     (body_sim : ∀ {fuel : Nat} {env env' : LowLevelEnv} {mcEnv : MicroRustEnv} {oc : Outcome},
       evalStmt fuel env body = some (oc, env') →
-      microRustBridge env mcEnv → VarNameInjectiveRust → oc ≠ .outOfFuel →
+      microRustBridge env mcEnv → oc ≠ .outOfFuel →
       WellFormedArrayBasesRust body →
       ∃ mcEnv', evalMicroC fuel mcEnv (stmtToMicroRust body) = some (oc, mcEnv')
         ∧ microRustBridge env' mcEnv')
     {fuel : Nat} :
     ∀ {env env' : LowLevelEnv} {mcEnv : MicroRustEnv} {oc : Outcome},
     evalStmt fuel env (.while cond body) = some (oc, env') →
-    microRustBridge env mcEnv → VarNameInjectiveRust → oc ≠ .outOfFuel →
+    microRustBridge env mcEnv → oc ≠ .outOfFuel →
     WellFormedArrayBasesRust body →
     ∃ mcEnv', evalMicroC fuel mcEnv (.while_ (exprToMicroRust cond) (stmtToMicroRust body))
       = some (oc, mcEnv') ∧ microRustBridge env' mcEnv' := by
   induction fuel with
   | zero =>
-    intro env env' mcEnv oc h _ _ hoc _
+    intro env env' mcEnv oc h _ hoc _
     simp only [evalStmt_while_zero] at h
     have : oc = .outOfFuel := by
       have := Option.some.inj h; exact (congrArg Prod.fst this).symm
     exact absurd this hoc
   | succ n ih_fuel =>
-    intro env env' mcEnv oc h hb hinj hoc hwf
+    intro env env' mcEnv oc h hb hoc hwf
     simp only [evalStmt_while_succ] at h
     simp only [evalMicroC_while_succ]
     -- Bridge the condition: rewrite MicroRust condition to Core condition
@@ -165,17 +165,17 @@ private theorem sim_while_helper_rust
             cases ob with
             | normal =>
               -- Body normal → get MicroRust body result, then recurse
-              obtain ⟨mcMid, hmcBody, hbMid⟩ := body_sim hbody hb hinj (by simp) hwf
+              obtain ⟨mcMid, hmcBody, hbMid⟩ := body_sim hbody hb (by simp) hwf
               rw [hmcBody]
-              exact ih_fuel h hbMid hinj hoc hwf
+              exact ih_fuel h hbMid hoc hwf
             | continue_ =>
               -- Body continue → same as normal for while
-              obtain ⟨mcMid, hmcBody, hbMid⟩ := body_sim hbody hb hinj (by simp) hwf
+              obtain ⟨mcMid, hmcBody, hbMid⟩ := body_sim hbody hb (by simp) hwf
               rw [hmcBody]
-              exact ih_fuel h hbMid hinj hoc hwf
+              exact ih_fuel h hbMid hoc hwf
             | break_ =>
               -- Body break → while exits with normal
-              obtain ⟨mcMid, hmcBody, hbMid⟩ := body_sim hbody hb hinj (by simp) hwf
+              obtain ⟨mcMid, hmcBody, hbMid⟩ := body_sim hbody hb (by simp) hwf
               rw [hmcBody]
               have := Option.some.inj h
               have hoc_eq : oc = .normal := (congrArg Prod.fst this).symm
@@ -185,7 +185,7 @@ private theorem sim_while_helper_rust
               exact ⟨mcMid, rfl, hbMid⟩
             | return_ rv =>
               -- Body return → while propagates
-              obtain ⟨mcMid, hmcBody, hbMid⟩ := body_sim hbody hb hinj (by simp) hwf
+              obtain ⟨mcMid, hmcBody, hbMid⟩ := body_sim hbody hb (by simp) hwf
               rw [hmcBody]
               have := Option.some.inj h
               have hoc_eq : oc = .return_ rv := (congrArg Prod.fst this).symm
@@ -212,7 +212,6 @@ theorem stmtToMicroRust_correct
     {stmt : Stmt} {oc : Outcome}
     (heval : evalStmt fuel env stmt = some (oc, env'))
     (hb : microRustBridge env mcEnv)
-    (hinj : VarNameInjectiveRust)
     (hoc : oc ≠ .outOfFuel)
     (hwf : WellFormedArrayBasesRust stmt) :
     ∃ mcEnv', evalMicroC fuel mcEnv (stmtToMicroRust stmt) = some (oc, mcEnv')
@@ -279,7 +278,7 @@ theorem stmtToMicroRust_correct
         have := congrArg Prod.snd this; simp at this; exact this.symm
       subst hoc_eq; subst henv_eq
       exact ⟨mcEnv.update (varNameToRust name) v, rfl,
-        microRustBridge_update hb name v (fun w h => hinj h)⟩
+        microRustBridge_update hb name v⟩
   | store base idx val =>
     simp only [evalStmt_store] at heval
     -- Extract getArrayName result from heval
@@ -287,7 +286,7 @@ theorem stmtToMicroRust_correct
     cases gn with
     | none => simp at heval
     | some name =>
-      -- WellFormedBaseRust gives us: base = .varRef (.user name) ∧ sanitizeIdentifierRust name = name
+      -- WellFormedBaseRust gives us: base = .varRef (.user name) ∧ varNameToRust (.user name) = name
       obtain ⟨hbase_eq, hsn⟩ := wf_base_is_user_rust base name hgn hwf
       subst hbase_eq
       -- Bridge idx and val expressions
@@ -295,7 +294,8 @@ theorem stmtToMicroRust_correct
       have hval := exprToMicroRust_bridge env mcEnv val hb
       -- Simplify MicroRust side
       simp only [stmtToMicroRust_store, exprToMicroRust_varRef]
-      simp only [evalMicroC, getMicroCArrayName, varNameToRust, hsn]
+      rw [hsn]
+      simp only [evalMicroC, getMicroCArrayName]
       rw [← hidx, ← hval]
       generalize hei : evalExpr env idx = ei at heval ⊢
       cases ei with
@@ -315,7 +315,7 @@ theorem stmtToMicroRust_correct
               have := congrArg Prod.snd this; simp at this; exact this.symm
             subst hoc_eq; subst henv_eq
             exact ⟨mcEnv.update (name ++ "[" ++ toString i ++ "]") vv, rfl,
-              microRustBridge_array_update hb hinj name i vv⟩
+              microRustBridge_array_update hb name i vv⟩
   | load var base idx =>
     simp only [evalStmt_load] at heval
     generalize hgn : getArrayName base = gn at heval
@@ -326,7 +326,8 @@ theorem stmtToMicroRust_correct
       subst hbase_eq
       have hidx := exprToMicroRust_bridge env mcEnv idx hb
       simp only [stmtToMicroRust_load, exprToMicroRust_varRef]
-      simp only [evalMicroC, getMicroCArrayName, varNameToRust, hsn]
+      rw [hsn]
+      simp only [evalMicroC, getMicroCArrayName]
       rw [← hidx]
       generalize hei : evalExpr env idx = ei at heval ⊢
       cases ei with
@@ -351,7 +352,7 @@ theorem stmtToMicroRust_correct
             exact this
           refine ⟨mcEnv.update (varNameToRust var) (mcEnv (name ++ "[" ++ toString i ++ "]")), rfl, ?_⟩
           rw [← hval_bridge]
-          exact microRustBridge_update hb var (env (.array name i)) (fun w h => hinj h)
+          exact microRustBridge_update hb var (env (.array name i))
   | call result fname args =>
     simp only [evalStmt_call] at heval
     exact absurd heval (by simp)
@@ -420,9 +421,9 @@ theorem stmtToMicroRust_correct
         | false => exact ih_else heval hb hoc hwf_else
   | «while» cond body ih_body =>
     exact sim_while_helper_rust cond body
-      (fun {f} {e} {e'} {me} {o} he hbe _hinj hoe hwe =>
+      (fun {f} {e} {e'} {me} {o} he hbe hoe hwe =>
         ih_body he hbe hoe hwe)
-      heval hb hinj hoc hwf
+      heval hb hoc hwf
   | for_ init cond step body ih_init ih_step ih_body =>
     obtain ⟨hwf_init, hwf_body, hwf_step⟩ := hwf
     cases fuel with
@@ -454,11 +455,11 @@ theorem stmtToMicroRust_correct
           -- Build compound body IH for (.seq body step)
           have seq_sim : ∀ {f : Nat} {e e' : LowLevelEnv} {me : MicroRustEnv} {o : Outcome},
               evalStmt f e (.seq body step) = some (o, e') →
-              microRustBridge e me → VarNameInjectiveRust → o ≠ .outOfFuel →
+              microRustBridge e me → o ≠ .outOfFuel →
               WellFormedArrayBasesRust (.seq body step) →
               ∃ me', evalMicroC f me (stmtToMicroRust (.seq body step)) = some (o, me')
                 ∧ microRustBridge e' me' := by
-            intro f e e' me o he hbe _h hoe hwe
+            intro f e e' me o he hbe hoe hwe
             obtain ⟨hwb, hws⟩ := hwe
             -- This IS the seq case of the master theorem applied to body and step
             simp only [evalStmt_seq] at he
@@ -507,7 +508,7 @@ theorem stmtToMicroRust_correct
                 exact absurd this hoe
           -- Use sim_while_helper_rust at fuel n with compound seq IH
           have while_at_n := sim_while_helper_rust cond (.seq body step) seq_sim
-            heval hbInit hinj hoc ⟨hwf_body, hwf_step⟩
+            heval hbInit hoc ⟨hwf_body, hwf_step⟩
           -- Get MicroRust result at fuel n
           obtain ⟨mcFinal, hmcWhile_n, hbFinal⟩ := while_at_n
           -- Boost while from fuel n to n+1 via fuel_mono
@@ -536,7 +537,7 @@ theorem stmtToMicroRust_correct
 
 /-! ## WellFormedArrayBasesRust: key fact -/
 
-/-- "mem" is already a valid Rust identifier (sanitizeIdentifierRust is identity). -/
-theorem sanitizeIdentifierRust_mem : sanitizeIdentifierRust "mem" = "mem" := by native_decide
+/-- "mem" prints unchanged as a Rust identifier. -/
+theorem varNameToRust_mem : varNameToRust (.user "mem") = "mem" := by decide
 
 end TrustLean
