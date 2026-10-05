@@ -85,6 +85,9 @@ grep -r "sorry" TrustLean/ --include="*.lean" | wc -l  # should be 0
 # Fail unless every gate theorem depends only on propext, Classical.choice, Quot.sound
 lake env lean --run scripts/CheckAxioms.lean
 
+# Fail unless the proof that VarNameInjective is false stops compiling
+lake env lean --run scripts/CheckVacuity.lean
+
 # Run integration tests
 lake env lean TrustLean/Tests/Integration.lean
 ```

@@ -19,7 +19,8 @@ def required : Array Name := #[
   `TrustLean.parseMicroRust_roundtrip, `TrustLean.parseMicroRustExpr_roundtrip,
   `TrustLean.stmtToMicroC_correct, `TrustLean.stmtToMicroC_correct_withCalls,
   `TrustLean.stmtToMicroRust_correct, `TrustLean.stmtToMicroRust_correct_withCalls,
-  `TrustLean.Bridge.expandedSigmaToStmt_correct, `TrustLean.Pipeline.sound]
+  `TrustLean.Bridge.expandedSigmaToStmt_correct, `TrustLean.Pipeline.sound,
+  `TrustLean.varNameToC_injective, `TrustLean.varNameToRust_injective]
 
 def isGateName (n : Name) : Bool :=
   match n with
