@@ -134,13 +134,15 @@ theorem monty_identity : (2013265919 * 2013265921 + 1) % 2^32 = 0 := by native_d
 theorem monty_reduce_spec_mod_correct (x : Nat) (hx : x < 2^32 * 2013265921) :
     (2^32 * monty_reduce_spec x) % 2013265921 = x % 2013265921 := by
   unfold monty_reduce_spec
-  omega
+  simp only []
+  split <;> omega
 
 /-- The spec is bounded: result < P for valid inputs. -/
 theorem monty_reduce_spec_bounded (x : Nat) (hx : x < 2^32 * 2013265921) :
     monty_reduce_spec x < 2013265921 := by
   unfold monty_reduce_spec
-  omega
+  simp only []
+  split <;> omega
 
 /-- The spec matches concrete values. -/
 example : monty_reduce_spec 0 = 0 := by native_decide
@@ -190,7 +192,10 @@ example :
         pure (e "result")) = some (.int 42) := by native_decide
 
 /-- Verify: R mod P (R = 2^32, P = 2013265921) -/
-example : babyBear_R % babyBear_P = 2281701375 := by native_decide
+example : babyBear_R % babyBear_P = 268435454 := by decide
+
+/-- Negative control: the previously asserted value of R mod P is wrong. -/
+example : babyBear_R % babyBear_P ≠ 2281701375 := by decide
 
 /-- Verify: monty_reduce(42 * R) = 42, and R * 42 = 42 * R ≡ 42 * R (mod P) -/
 example : (42 * babyBear_R) % babyBear_P = (babyBear_R * 42) % babyBear_P := by
