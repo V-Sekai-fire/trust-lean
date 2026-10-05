@@ -59,7 +59,7 @@ theorem generateCHeader_no_helper (cfg : CConfig) (h : cfg.includePowerHelper = 
     "_Static_assert(INT_MAX < UINT32_MAX, \"uint32_t does not promote to int (C11 6.3.1.1p2)\");\n" ++
     "_Static_assert(sizeof(unsigned) == 4 && UINT_MAX == UINT32_MAX, " ++
     "\"a u-suffixed literal below 2^32 is a 32-bit unsigned int (C11 6.4.4.1p5)\");" := by
-  unfold generateCHeader; simp [h]
+  unfold generateCHeader uint32Asserts; simp [h]
 
 -- Note: generateCHeader_with_helper (includePowerHelper=true) extends the base
 -- with a power function. The base inclusion is preserved since the helper only

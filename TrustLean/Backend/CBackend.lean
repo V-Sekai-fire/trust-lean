@@ -213,9 +213,7 @@ def generateCFunction (cfg : CConfig) (funcName : String)
     only when the result does. -/
 def generateCHeader (cfg : CConfig) : String :=
   let base := "#include <stdint.h>\n#include <stdbool.h>\n#include <stdlib.h>\n#include <limits.h>\n\n" ++
-    "_Static_assert(INT_MAX < UINT32_MAX, \"uint32_t does not promote to int (C11 6.3.1.1p2)\");\n" ++
-    "_Static_assert(sizeof(unsigned) == 4 && UINT_MAX == UINT32_MAX, " ++
-    "\"a u-suffixed literal below 2^32 is a 32-bit unsigned int (C11 6.4.4.1p5)\");"
+    uint32Asserts
   if cfg.includePowerHelper then
     base ++ "\n\n" ++
     "static " ++ cfg.intType ++ " power(" ++ cfg.intType ++ " base, unsigned int exp) {\n" ++

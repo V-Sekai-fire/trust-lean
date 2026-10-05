@@ -274,4 +274,11 @@ def declsToString : CDecls → String
 def printTyped (Γ : CDecls) (s : MicroCStmt) : String :=
   declsToString Γ ++ "{ " ++ microCToString s ++ " }"
 
+/-- What printed `uint32_t` code relies on: `uint32_t` arithmetic does not promote to `int`, and
+    `nu` is a `uint32_t` value. Needs `<stdint.h>` and `<limits.h>`. -/
+def uint32Asserts : String :=
+  "_Static_assert(INT_MAX < UINT32_MAX, \"uint32_t does not promote to int (C11 6.3.1.1p2)\");\n" ++
+    "_Static_assert(sizeof(unsigned) == 4 && UINT_MAX == UINT32_MAX, " ++
+    "\"a u-suffixed literal below 2^32 is a 32-bit unsigned int (C11 6.4.4.1p5)\");"
+
 end TrustLean
