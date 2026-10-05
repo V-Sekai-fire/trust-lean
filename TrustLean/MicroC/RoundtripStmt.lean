@@ -30,7 +30,6 @@ def VarNameSafe (name : String) : Prop :=
     Excludes expressions whose printed form starts with an identifier that
     would be misinterpreted by pIdent before pExprF gets a chance. -/
 def AssignRhsSafe : MicroCExpr → Prop
-  | .litBool _ => False       -- "true"/"false" parsed as varRef by pIdent
   | .arrayAccess _ _ => False -- "a[i]" triggers load path in pRhsF
   | .powCall _ _ => False     -- "pow(b,n)" triggers call path in pRhsF
   | _ => True
@@ -453,6 +452,16 @@ private theorem pIdent_litInt_none (z : Int) (rest : List Char) :
       have ⟨ha, hu⟩ := digit_not_ident_start c hdig
       unfold pIdent; simp [ha, hu]
 
+/-- pIdent returns none on printed litU32 (first char is a digit). -/
+private theorem pIdent_litU32_none (m : UInt32) (rest : List Char) :
+    pIdent ((microCExprToString (.litU32 m)).toList ++ rest) = none := by
+  match hcs : (microCExprToString (.litU32 m)).toList with
+  | [] => simp at hcs
+  | c :: cs =>
+    have ⟨ha, hu⟩ := digit_not_ident_start c (print_litU32_head m c cs hcs)
+    simp only [List.cons_append]
+    unfold pIdent; simp [ha, hu]
+
 /-- pIdent returns none on printed binOp (first char is '('). -/
 private theorem pIdent_binOp_none (op : MicroCBinOp) (l r : MicroCExpr) (rest : List Char) :
     pIdent ((microCExprToString (.binOp op l r)).toList ++ rest) = none := by
@@ -638,6 +647,13 @@ theorem expr_ne_rparen_start (e : MicroCExpr) (he : WFExpr e) (rest : List Char)
         have := (List.cons.inj h).1
         subst this
         simp [Char.isDigit] at hdig
+  | litU32 m =>
+    match hcs : (microCExprToString (.litU32 m)).toList with
+    | [] => simp at hcs
+    | c :: cs' =>
+      rw [hcs, List.cons_append] at h
+      have hd := print_litU32_head m c cs' hcs
+      have := (List.cons.inj h).1; subst this; simp [Char.isDigit] at hd
   | litBool b =>
     cases b <;> simp only [microCExprToString_litBool_true, microCExprToString_litBool_false,
       show "true".toList = ['t', 'r', 'u', 'e'] from rfl,
@@ -874,57 +890,117 @@ private theorem parseStmtSeq_of_pStmtF
     exact skipWs_nonws '}' rest (by decide)
   simp only [h_skip]
 
-/-- Equation lemma: pIfF on '(' :: rest unfolds to the nested match chain. -/
-private theorem pIfF_lparen_eq (n : Nat) (rest : List Char) :
-    pStmtF.pIfF n ('(' :: rest) =
-    match pExprF (n + 1) (skipWs rest) with
-    | some (cond, rest') =>
-      match skipWs rest' with
-      | ')' :: rest'' =>
-        match skipWs rest'' with
-        | '{' :: rest''' =>
-          match parseStmtSeq (pStmtF n) n (skipWs rest''') with
-          | some (thenB, rest4) =>
-            match skipWs rest4 with
-            | '}' :: rest5 =>
-              match skipWs rest5 with
-              | 'e' :: 'l' :: 's' :: 'e' :: rest6 =>
-                match skipWs rest6 with
-                | '{' :: rest7 =>
-                  match parseStmtSeq (pStmtF n) n (skipWs rest7) with
-                  | some (elseB, rest8) =>
-                    match skipWs rest8 with
-                    | '}' :: final => some (.ite cond thenB elseB, final)
-                    | _ => none
-                  | none => none
-                | _ => none
+/-- Equation lemma: pIfF unfolds to the nested match chain. -/
+private theorem pIfF_eq (n : Nat) (cs : List Char) :
+    pStmtF.pIfF n cs =
+    match pCondF n (skipWs cs) with
+    | some (cond, rest'') =>
+      match skipWs rest'' with
+      | '{' :: rest''' =>
+        match parseStmtSeq (pStmtF n) n (skipWs rest''') with
+        | some (thenB, rest4) =>
+          match skipWs rest4 with
+          | '}' :: rest5 =>
+            match skipWs rest5 with
+            | 'e' :: 'l' :: 's' :: 'e' :: rest6 =>
+              match skipWs rest6 with
+              | '{' :: rest7 =>
+                match parseStmtSeq (pStmtF n) n (skipWs rest7) with
+                | some (elseB, rest8) =>
+                  match skipWs rest8 with
+                  | '}' :: final => some (.ite cond thenB elseB, final)
+                  | _ => none
+                | none => none
               | _ => none
             | _ => none
-          | none => none
-        | _ => none
+          | _ => none
+        | none => none
       | _ => none
     | none => none := by
   unfold pStmtF.pIfF; rfl
 
-/-- Equation lemma: pWhileF on '(' :: rest unfolds to the nested match chain. -/
-private theorem pWhileF_lparen_eq (n : Nat) (rest : List Char) :
-    pStmtF.pWhileF n ('(' :: rest) =
-    match pExprF (n + 1) (skipWs rest) with
-    | some (cond, rest') =>
-      match skipWs rest' with
-      | ')' :: rest'' =>
-        match skipWs rest'' with
-        | '{' :: rest''' =>
-          match parseStmtSeq (pStmtF n) n (skipWs rest''') with
-          | some (body, rest4) =>
-            match skipWs rest4 with
-            | '}' :: final => some (.while_ cond body, final)
-            | _ => none
-          | none => none
-        | _ => none
+/-- Equation lemma: pWhileF unfolds to the nested match chain. -/
+private theorem pWhileF_eq (n : Nat) (cs : List Char) :
+    pStmtF.pWhileF n cs =
+    match pCondF n (skipWs cs) with
+    | some (cond, rest'') =>
+      match skipWs rest'' with
+      | '{' :: rest''' =>
+        match parseStmtSeq (pStmtF n) n (skipWs rest''') with
+        | some (body, rest4) =>
+          match skipWs rest4 with
+          | '}' :: final => some (.while_ cond body, final)
+          | _ => none
+        | none => none
       | _ => none
     | none => none := by
   unfold pStmtF.pWhileF; rfl
+
+/-! ## Conditions -/
+
+private theorem pCondF_lparen (n : Nat) (rest : List Char) :
+    pCondF n ('(' :: rest) =
+      match pExprF (n + 1) (skipWs rest) with
+      | some (cond, rest') =>
+        match skipWs rest' with
+        | ')' :: rest'' => some (cond, rest'')
+        | _ => pExprF (n + 1) ('(' :: rest)
+      | none => pExprF (n + 1) ('(' :: rest) := by
+  unfold pCondF; rfl
+
+private theorem binOp_first (op : MicroCBinOp) : ∃ c t, (microCBinOpToString op).toList = c :: t ∧
+    (c ≠ ' ' ∧ c ≠ '\n' ∧ c ≠ '\t' ∧ c ≠ '\r') ∧ c ≠ ')' := by
+  cases op <;> exact ⟨_, _, rfl, ⟨by decide, by decide, by decide, by decide⟩, by decide⟩
+
+theorem exprSafe_space_lbrace (rest : List Char) : ExprSafe (' ' :: '{' :: rest) :=
+  ⟨Or.inr ⟨' ', _, rfl, by decide⟩, Or.inr ⟨' ', _, rfl, by decide, by decide, by decide⟩,
+   by intro cs; simp, by intro cs; simp⟩
+
+/-- Every printed condition starts with `(`. -/
+theorem microCCondToString_head (c : MicroCExpr) :
+    ∃ t, (microCCondToString c).toList = '(' :: t := by
+  cases c <;> simp [microCCondToString, String.toList_append]
+
+theorem skipWs_cond (c : MicroCExpr) (rest : List Char) :
+    skipWs ((microCCondToString c).toList ++ rest) = (microCCondToString c).toList ++ rest := by
+  obtain ⟨t, ht⟩ := microCCondToString_head c
+  rw [ht, List.cons_append]; exact skipWs_nonws '(' _ (by decide)
+
+theorem microCCondToString_length (c : MicroCExpr) :
+    (microCExprToString c).toList.length ≤ (microCCondToString c).toList.length := by
+  cases c <;> simp [microCCondToString, String.toList_append] <;> omega
+
+/-- The parser reads back the condition `microCCondToString` prints. -/
+theorem pCondF_roundtrip (c : MicroCExpr) (hc : WFExpr c) (hd : NegLitDisam c) (n : Nat)
+    (hfuel : n + 1 ≥ exprDepth c) (rest : List Char) (hrest : ExprSafe rest) :
+    pCondF n ((microCCondToString c).toList ++ rest) = some (c, rest) := by
+  by_cases hb : ∃ op l r, c = .binOp op l r
+  · obtain ⟨op, l, r, rfl⟩ := hb
+    cases hc with | binOp _ _ _ hl hr =>
+    have hfuel_l : n ≥ exprDepth l := by
+      simp only [exprDepth] at hfuel; have := Nat.le_max_left (exprDepth l) (exprDepth r); omega
+    have hX : (microCCondToString (.binOp op l r)).toList ++ rest =
+        '(' :: ((microCExprToString l).toList ++ (' ' :: (microCBinOpToString op).toList ++
+          (' ' :: (microCExprToString r).toList ++ (')' :: rest)))) := by
+      simp [microCCondToString, String.toList_append]
+    rw [hX, pCondF_lparen, skipWs_expr_start l hl,
+      expr_roundtrip_with_rest l hl hd.1 (n + 1) (by omega) _ (exprSafe_binop_mid op _ rest)]
+    obtain ⟨c, t, hct, hws, hrp⟩ := binOp_first op
+    simp only [hct, List.cons_append, skipWs_space, skipWs_nonws c _ hws]
+    split
+    · rename_i heq; exact absurd (List.cons.inj heq).1 hrp
+    · rw [← List.cons_append, ← List.cons_append, ← hct]
+      have := expr_roundtrip_with_rest (.binOp op l r) (.binOp op l r hl hr) hd (n + 1) hfuel
+        rest hrest
+      simpa [String.toList_append] using this
+  · have hcond : microCCondToString c = "(" ++ microCExprToString c ++ ")" := by
+      cases c <;> first | rfl | exact absurd ⟨_, _, _, rfl⟩ hb
+    rw [hcond]
+    simp only [String.toList_append, show "(".toList = ['('] from rfl,
+      show ")".toList = [')'] from rfl, List.cons_append, List.nil_append, List.append_assoc]
+    rw [pCondF_lparen, skipWs_expr_start c hc,
+      expr_roundtrip_with_rest c hc hd (n + 1) hfuel _ (exprSafe_rparen rest)]
+    simp [skipWs_nonws ')' rest (by decide)]
 
 /-! ## Combined roundtrip (Part A + Part B by WFStmt induction) -/
 
@@ -993,15 +1069,37 @@ private theorem roundtrip_combined (s : MicroCStmt) (hs : WFStmt s) (hd : NegLit
       rw [h_skip]; simp only []
       rw [skipWs_space_expr expr he (';' :: rest')]
       cases expr with
-      | litBool b => exact absurd hrhs (by simp [AssignRhsSafe])
+      | litBool b =>
+        unfold pStmtF.pRhsF
+        cases b with
+        | true =>
+          have htl : ("true" : String).toList = ['t', 'r', 'u', 'e'] := by decide
+          simp only [microCExprToString_litBool_true]
+          rw [pIdent_exact "true" _ (by decide) (by simp [htl])
+            (by intro c hc; simp [htl] at hc; rcases hc with rfl | rfl | rfl | rfl <;> decide)
+            (noLeadingIdent_semicolon _)]
+          simp [identExpr]
+        | false =>
+          have hfl : ("false" : String).toList = ['f', 'a', 'l', 's', 'e'] := by decide
+          simp only [microCExprToString_litBool_false]
+          rw [pIdent_exact "false" _ (by decide) (by simp [hfl])
+            (by intro c hc; simp [hfl] at hc; rcases hc with rfl | rfl | rfl | rfl | rfl <;> decide)
+            (noLeadingIdent_semicolon _)]
+          simp [identExpr]
       | arrayAccess a i => exact absurd hrhs (by simp [AssignRhsSafe])
       | powCall b k => exact absurd hrhs (by simp [AssignRhsSafe])
       | varRef v =>
-        cases he with | varRef _ hne_v hstart_v hcont_v _ =>
+        cases he with | varRef _ hne_v hstart_v hcont_v hkw =>
         simp only [microCExprToString_varRef]
         unfold pStmtF.pRhsF
         rw [pIdent_exact v _ hne_v hstart_v hcont_v (noLeadingIdent_semicolon _)]
-        simp
+        simp [identExpr, hkw.1, hkw.2]
+      | litU32 m =>
+        unfold pStmtF.pRhsF
+        rw [pIdent_litU32_none m (';' :: rest')]
+        rw [expr_roundtrip_with_rest (.litU32 m) he hd_e (n + 1) hfuel_e
+          (';' :: rest') (exprSafe_semicolon rest')]
+        simp [skipWs_nonws ';' rest' (by decide)]
       | litInt z =>
         unfold pStmtF.pRhsF
         rw [pIdent_litInt_none z (';' :: rest')]
@@ -1155,26 +1253,19 @@ private theorem roundtrip_combined (s : MicroCStmt) (hs : WFStmt s) (hd : NegLit
           some (.ite cond thenB elseB, rest') := by
       intro rest'
       simp only [microCToString_ite, String.toList_append,
-        show "if (".toList = ['i', 'f', ' ', '('] from rfl,
-        show ") { ".toList = [')', ' ', '{', ' '] from rfl,
+        show "if ".toList = ['i', 'f', ' '] from rfl,
+        show " { ".toList = [' ', '{', ' '] from rfl,
         show " } else { ".toList = [' ', '}', ' ', 'e', 'l', 's', 'e', ' ', '{', ' '] from rfl,
         show " }".toList = [' ', '}'] from rfl,
         List.append_assoc, List.cons_append, List.nil_append]
-      -- Goal: pStmtF (n+1) ('i'::'f'::' '::'('::condText ++ rest_chars) = some (.ite ...)
-      -- Step 1: Unfold pStmtF → dispatch to pIfF
       unfold pStmtF
-      show pStmtF.pIfF n ('(' :: ((microCExprToString cond).toList ++ ')' :: ' ' :: '{' :: ' ' ::
+      show pStmtF.pIfF n (skipWs ((microCCondToString cond).toList ++ ' ' :: '{' :: ' ' ::
         ((microCToString thenB).toList ++ ' ' :: '}' :: ' ' :: 'e' :: 'l' :: 's' :: 'e' ::
           ' ' :: '{' :: ' ' :: ((microCToString elseB).toList ++ ' ' :: '}' :: rest')))) =
         some (.ite cond thenB elseB, rest')
-      -- Step 2: Use equation lemma to unfold pIfF for '(' :: rest
-      rw [pIfF_lparen_eq]
-      -- Goal: (match pExprF (n+1) (skipWs (condText ++ condRest)) with ...) = ...
-      rw [skipWs_expr_start cond hc _,
-          expr_roundtrip_with_rest cond hc hd_c (n + 1) hfuel_c _ (exprSafe_rparen _)]
-      -- After expr: match some (cond, ')' :: ...) → proceed; skipWs ')' → ')'; match ')' → ...
-      simp only [skipWs_nonws ')' _ (by decide),
-                  skipWs_space, skipWs_nonws '{' _ (by decide)]
+      rw [pIfF_eq, skipWs_cond, skipWs_cond,
+        pCondF_roundtrip cond hc hd_c n hfuel_c _ (exprSafe_space_lbrace _)]
+      simp only [skipWs_space, skipWs_nonws '{' _ (by decide)]
       -- parseStmtSeq for thenB: skipWs (thenText ++ ...) = thenText ++ ...
       rw [skipWs_stmt_start thenB ht hd_t _]
       have hThen := (ih_t hd_t n hfuel_t
@@ -1204,20 +1295,17 @@ private theorem roundtrip_combined (s : MicroCStmt) (hs : WFStmt s) (hd : NegLit
           some (.while_ cond body, rest') := by
       intro rest'
       simp only [microCToString_while, String.toList_append,
-        show "while (".toList = ['w', 'h', 'i', 'l', 'e', ' ', '('] from rfl,
-        show ") { ".toList = [')', ' ', '{', ' '] from rfl,
+        show "while ".toList = ['w', 'h', 'i', 'l', 'e', ' '] from rfl,
+        show " { ".toList = [' ', '{', ' '] from rfl,
         show " }".toList = [' ', '}'] from rfl,
         List.append_assoc, List.cons_append, List.nil_append]
-      -- Dispatch: 'w'::'h'::'i'::'l'::'e'::' '::_ → pWhileF
       unfold pStmtF
-      show pStmtF.pWhileF n ('(' :: ((microCExprToString cond).toList ++ ')' :: ' ' :: '{' :: ' ' ::
+      show pStmtF.pWhileF n (skipWs ((microCCondToString cond).toList ++ ' ' :: '{' :: ' ' ::
         ((microCToString body).toList ++ ' ' :: '}' :: rest'))) =
         some (.while_ cond body, rest')
-      rw [pWhileF_lparen_eq]
-      rw [skipWs_expr_start cond hc _,
-          expr_roundtrip_with_rest cond hc hd_c (n + 1) hfuel_c _ (exprSafe_rparen _)]
-      simp only [skipWs_nonws ')' _ (by decide),
-                  skipWs_space, skipWs_nonws '{' _ (by decide)]
+      rw [pWhileF_eq, skipWs_cond, skipWs_cond,
+        pCondF_roundtrip cond hc hd_c n hfuel_c _ (exprSafe_space_lbrace _)]
+      simp only [skipWs_space, skipWs_nonws '{' _ (by decide)]
       -- simp already consumed the space before body text
       rw [skipWs_stmt_start body hb hd_b _]
       have hBody := (ih_b hd_b n hfuel_b rest').2 n hsf_b
@@ -1410,10 +1498,11 @@ private theorem totalFuel_le_printLen (s : MicroCStmt) (hs : WFStmt s)
     obtain ⟨hd_c, hd_t, hd_e⟩ := hd
     simp only [totalFuel, microCToString_ite, String.toList_append,
       List.length_append]
-    have hif : "if (".toList.length = 4 := by decide
-    have hcb : ") { ".toList.length = 4 := by decide
+    have hif : "if ".toList.length = 3 := by decide
+    have hcb : " { ".toList.length = 3 := by decide
     have hel : " } else { ".toList.length = 10 := by decide
     have hcl : " }".toList.length = 2 := by decide
+    have hcc := microCCondToString_length cond
     have hdc := exprDepth_le_length cond hc
     have ht := ih_t hd_t; have he := ih_e hd_e
     have hinner : max (totalFuel thenB + 1) (totalFuel elseB + 1) ≤
@@ -1430,9 +1519,10 @@ private theorem totalFuel_le_printLen (s : MicroCStmt) (hs : WFStmt s)
     obtain ⟨hd_c, hd_b⟩ := hd
     simp only [totalFuel, microCToString_while, String.toList_append,
       List.length_append]
-    have hwh : "while (".toList.length = 7 := by decide
-    have hcb : ") { ".toList.length = 4 := by decide
+    have hwh : "while ".toList.length = 6 := by decide
+    have hcb : " { ".toList.length = 3 := by decide
     have hcl : " }".toList.length = 2 := by decide
+    have hcc := microCCondToString_length cond
     have hdc := exprDepth_le_length cond hc
     have hb := ih_b hd_b
     have : max (exprDepth cond) (totalFuel body + 1) ≤

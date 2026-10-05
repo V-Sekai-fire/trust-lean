@@ -36,6 +36,7 @@ def getMicroCArrayName : MicroCExpr → Option String
     No fuel needed — expressions always terminate (structural recursion). -/
 def evalMicroCExpr (env : MicroCEnv) : MicroCExpr → Option Value
   | .litInt n => some (.int n)
+  | .litU32 n => some (.int n.toNat)
   | .litBool b => some (.bool b)
   | .varRef name => some (env name)
   | .binOp op e1 e2 =>
@@ -59,6 +60,9 @@ def evalMicroCExpr (env : MicroCEnv) : MicroCExpr → Option Value
 
 @[simp] theorem evalMicroCExpr_litInt (env : MicroCEnv) (n : Int) :
     evalMicroCExpr env (.litInt n) = some (.int n) := rfl
+
+@[simp] theorem evalMicroCExpr_litU32 (env : MicroCEnv) (n : UInt32) :
+    evalMicroCExpr env (.litU32 n) = some (.int n.toNat) := rfl
 
 @[simp] theorem evalMicroCExpr_litBool (env : MicroCEnv) (b : Bool) :
     evalMicroCExpr env (.litBool b) = some (.bool b) := rfl

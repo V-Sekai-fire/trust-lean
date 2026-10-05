@@ -7,7 +7,8 @@
   of Trust-Lean's stmtToC backend. String-based identifiers (C identifiers).
 
   Design decisions:
-  - MicroCExpr: 7 constructors (litInt, litBool, varRef, binOp, unaryOp, powCall, arrayAccess)
+  - MicroCExpr: 8 constructors (litInt, litU32, litBool, varRef, binOp, unaryOp, powCall,
+    arrayAccess)
   - MicroCStmt: 11 constructors (no for_ — desugared to seq+while during translation)
   - String identifiers: MicroC IS a C subset, so identifiers are C strings
   - Flat namespace: no shadowing, no nested scopes (v2.0.0 simplification)
@@ -51,11 +52,12 @@ inductive MicroCUnaryOp where
 
 /-! ## MicroC Expressions -/
 
-/-- MicroC expression AST. 7 constructors matching LowLevelExpr
-    but with String identifiers (C-level names).
+/-- MicroC expression AST: LowLevelExpr's constructors with String identifiers (C-level names),
+    plus `litU32`, a `uint32_t` literal printed with a `u` suffix.
     All binary sub-expressions are parenthesized in the canonical form. -/
 inductive MicroCExpr where
   | litInt    : Int → MicroCExpr
+  | litU32    : UInt32 → MicroCExpr
   | litBool   : Bool → MicroCExpr
   | varRef    : String → MicroCExpr
   | binOp     : MicroCBinOp → MicroCExpr → MicroCExpr → MicroCExpr
@@ -194,6 +196,7 @@ def evalMicroCUnaryOp (op : MicroCUnaryOp) (v : Value) : Option Value :=
 /-- Size of a MicroC expression (number of constructors). -/
 def MicroCExpr.size : MicroCExpr → Nat
   | .litInt _ => 1
+  | .litU32 _ => 1
   | .litBool _ => 1
   | .varRef _ => 1
   | .binOp _ lhs rhs => 1 + lhs.size + rhs.size

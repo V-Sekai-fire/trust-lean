@@ -79,6 +79,11 @@ def pBinOp : ParseR MicroCBinOp := fun cs =>
 
 /-! ## Total Expression Parser -/
 
+/-- The literal after its digits `n`: a `u` suffix makes it a `uint32_t` literal. -/
+def litOfDigits (n : Nat) : List Char → Option (MicroCExpr × List Char)
+  | 'u' :: rest => if n < 2 ^ 32 then some (.litU32 (UInt32.ofNat n), rest) else none
+  | rest => some (.litInt (Int.ofNat n), rest)
+
 set_option maxHeartbeats 400000 in
 /-- Total expression parser with fuel. Fuel decreases on each recursive
     pExprF call. At fuel 0, returns none. -/
@@ -93,7 +98,7 @@ def pExprF : Nat → ParseR MicroCExpr
     | c :: _ =>
       if c.isDigit then
         match pNat cs with
-        | some (n, rest) => some (.litInt (Int.ofNat n), rest)
+        | some (n, rest) => litOfDigits n rest
         | none => none
       else if c.isAlpha || c == '_' then pIdentF fuel cs
       else none
@@ -185,6 +190,21 @@ where
       | _ => none
     | none => none
 
+/-! ## Condition Parser -/
+
+/-- An `if` or `while` condition, as `microCCondToString` prints it: `(e)` for most expressions,
+    a binary operation's own parentheses otherwise. -/
+def pCondF (fuel : Nat) (cs : List Char) : Option (MicroCExpr × List Char) :=
+  match cs with
+  | '(' :: rest =>
+    match pExprF (fuel + 1) (skipWs rest) with
+    | some (cond, rest') =>
+      match skipWs rest' with
+      | ')' :: rest'' => some (cond, rest'')
+      | _ => pExprF (fuel + 1) cs
+    | none => pExprF (fuel + 1) cs
+  | _ => none
+
 /-! ## Statement Sequence Parser (HOF — breaks mutual recursion) -/
 
 /-- Parse a sequence of statements using a given statement parser.
@@ -205,6 +225,12 @@ def parseStmtSeq (parseOne : ParseR MicroCStmt) : Nat → ParseR MicroCStmt
     | none => none
 
 /-! ## Total Statement Parser -/
+
+/-- An identifier read as an expression: `true` and `false` are the boolean literals. -/
+def identExpr (name : String) : MicroCExpr :=
+  if name == "true" then .litBool true
+  else if name == "false" then .litBool false
+  else .varRef name
 
 /-- Total statement parser with fuel. -/
 def pStmtF : Nat → ParseR MicroCStmt
@@ -240,58 +266,46 @@ where
       | none => none
   pIfF (fuel : Nat) (cs : List Char) :
       Option (MicroCStmt × List Char) :=
-    match skipWs cs with
-    | '(' :: rest =>
-      match pExprF (fuel + 1) (skipWs rest) with
-      | some (cond, rest') =>
-        match skipWs rest' with
-        | ')' :: rest'' =>
-          match skipWs rest'' with
-          | '{' :: rest''' =>
-            match parseStmtSeq (pStmtF fuel) fuel (skipWs rest''') with
-            | some (thenB, rest4) =>
-              match skipWs rest4 with
-              | '}' :: rest5 =>
-                match skipWs rest5 with
-                | 'e' :: 'l' :: 's' :: 'e' :: rest6 =>
-                  match skipWs rest6 with
-                  | '{' :: rest7 =>
-                    match parseStmtSeq (pStmtF fuel) fuel
-                        (skipWs rest7) with
-                    | some (elseB, rest8) =>
-                      match skipWs rest8 with
-                      | '}' :: final =>
-                        some (.ite cond thenB elseB, final)
-                      | _ => none
-                    | none => none
+    match pCondF fuel (skipWs cs) with
+    | some (cond, rest'') =>
+      match skipWs rest'' with
+      | '{' :: rest''' =>
+        match parseStmtSeq (pStmtF fuel) fuel (skipWs rest''') with
+        | some (thenB, rest4) =>
+          match skipWs rest4 with
+          | '}' :: rest5 =>
+            match skipWs rest5 with
+            | 'e' :: 'l' :: 's' :: 'e' :: rest6 =>
+              match skipWs rest6 with
+              | '{' :: rest7 =>
+                match parseStmtSeq (pStmtF fuel) fuel
+                    (skipWs rest7) with
+                | some (elseB, rest8) =>
+                  match skipWs rest8 with
+                  | '}' :: final =>
+                    some (.ite cond thenB elseB, final)
                   | _ => none
-                | _ => none
+                | none => none
               | _ => none
-            | none => none
+            | _ => none
           | _ => none
-        | _ => none
-      | none => none
-    | _ => none
+        | none => none
+      | _ => none
+    | none => none
   pWhileF (fuel : Nat) (cs : List Char) :
       Option (MicroCStmt × List Char) :=
-    match skipWs cs with
-    | '(' :: rest =>
-      match pExprF (fuel + 1) (skipWs rest) with
-      | some (cond, rest') =>
-        match skipWs rest' with
-        | ')' :: rest'' =>
-          match skipWs rest'' with
-          | '{' :: rest''' =>
-            match parseStmtSeq (pStmtF fuel) fuel (skipWs rest''') with
-            | some (body, rest4) =>
-              match skipWs rest4 with
-              | '}' :: final => some (.while_ cond body, final)
-              | _ => none
-            | none => none
+    match pCondF fuel (skipWs cs) with
+    | some (cond, rest'') =>
+      match skipWs rest'' with
+      | '{' :: rest''' =>
+        match parseStmtSeq (pStmtF fuel) fuel (skipWs rest''') with
+        | some (body, rest4) =>
+          match skipWs rest4 with
+          | '}' :: final => some (.while_ cond body, final)
           | _ => none
-        | _ => none
-      | none => none
-    | _ => none
+        | none => none
+      | _ => none
+    | none => none
   pAssignOrStoreF (fuel : Nat) (cs : List Char) :
       Option (MicroCStmt × List Char) :=
     match pIdent (skipWs cs) with
@@ -347,7 +361,7 @@ where
           | _ => none
         | none => none
       | ';' :: final =>
-        some (.assign var (.varRef ident), final)
+        some (.assign var (identExpr ident), final)
       | _ => none
     | none =>
       match pExprF (fuel + 1) cs with

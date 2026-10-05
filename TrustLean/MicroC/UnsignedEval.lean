@@ -129,6 +129,7 @@ theorem evalMicroCBinOp_uint64_shl_64 :
 /-- Evaluate a MicroC expression with UInt32 wrapping at operation boundaries (L-626). -/
 def evalMicroCExpr_uint32 (env : MicroCEnv) : MicroCExpr → Option Value
   | .litInt n => some (.int n)
+  | .litU32 n => some (.int n.toNat)
   | .litBool b => some (.bool b)
   | .varRef name => some (env name)
   | .binOp op lhs rhs =>
@@ -154,6 +155,7 @@ def evalMicroCExpr_uint32 (env : MicroCEnv) : MicroCExpr → Option Value
 /-- Evaluate a MicroC expression with UInt64 wrapping at operation boundaries (L-626). -/
 def evalMicroCExpr_uint64 (env : MicroCEnv) : MicroCExpr → Option Value
   | .litInt n => some (.int n)
+  | .litU32 n => some (.int n.toNat)
   | .litBool b => some (.bool b)
   | .varRef name => some (env name)
   | .binOp op lhs rhs =>
