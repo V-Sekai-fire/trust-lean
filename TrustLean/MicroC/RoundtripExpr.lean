@@ -576,7 +576,7 @@ theorem lparen_not_ident : ¬ IsIdentC '(' := by
 theorem rparen_not_ident : ¬ IsIdentC ')' := by
   simp [IsIdentC, Char.isAlpha, Char.isUpper, Char.isLower, Char.isDigit]
 
-instance : DecidablePred IsIdentC := fun c => inferInstanceAs (Decidable (_ ∨ _ ∨ _))
+instance : DecidablePred IsIdentC := fun _ => inferInstanceAs (Decidable (_ ∨ _ ∨ _))
 
 private theorem not_mem_keyword (c0 : Char) (hc0 : c0.isAlpha = true) (w : List Char)
     (hw : ∀ c ∈ w, IsIdentC c) (s : Char) (hs : ¬ IsIdentC s) (hsr : s ≠ ')') :
