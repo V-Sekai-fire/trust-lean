@@ -45,6 +45,7 @@ def printfOf : String × CType → String
   | (x, .u32) => s!"printf(\"{x}=%u\\n\", (unsigned){x});\n"
   | (x, .i64) => s!"printf(\"{x}=%lld\\n\", (long long){x});\n"
   | (x, .bool) => s!"printf(\"{x}=%d\\n\", (int){x});\n"
+  | (_, .ptrU32) => ""
 
 def TrustLean.MicroCExpr.usesPower : MicroCExpr → Bool
   | .powCall _ _ => true
@@ -319,6 +320,7 @@ partial def randExpr : Nat → CType → Rng → MicroCExpr × Rng
       let (l, g) := readsVar .u32 (randExpr d .u32 g)
       let (r, g) := readsVar .u32 (randExpr d .u32 g)
       (bin op l r, g)
+  | _, .ptrU32, g => (u 0, g)
 
 def randAssign (g : Rng) : MicroCStmt × Rng :=
   let ((x, t), g) := pick g randDecls

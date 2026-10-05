@@ -18,17 +18,20 @@ namespace TrustLean
 
 /-! ## Types and Declarations -/
 
-/-- The C types a typed program declares. -/
+/-- The C types a typed program declares, and `uint32_t *restrict`, which only a function
+    parameter has. -/
 inductive CType where
   | u32
   | i64
   | bool
+  | ptrU32
   deriving Repr, DecidableEq, Inhabited
 
 def CType.name : CType → String
   | .u32 => "uint32_t"
   | .i64 => "int64_t"
   | .bool => "bool"
+  | .ptrU32 => "uint32_t *restrict"
 
 def CType.ofName : String → Option CType
   | "uint32_t" => some .u32
@@ -38,7 +41,7 @@ def CType.ofName : String → Option CType
 
 /-- The literal a declaration initialises its variable to: `0u`, `0` or `false`. -/
 def CType.zero : CType → MicroCExpr
-  | .u32 => .litU32 0
+  | .u32 | .ptrU32 => .litU32 0
   | .i64 => .litInt 0
   | .bool => .litBool false
 
@@ -178,8 +181,9 @@ def declNameOk (x : String) : Bool :=
     c.isLower && cs.all isValidCIdentChar && !cReservedIdentifiers.contains x &&
       x != "power" && x.toList.take 6 != "return".toList
 
+/-- Distinct declared names, each of a scalar type. -/
 def declsOk (Γ : CDecls) : Bool :=
-  Γ.all (fun p => declNameOk p.1) && decide (Γ.map (·.1)).Nodup
+  Γ.all (fun p => declNameOk p.1) && decide (Γ.map (·.1)).Nodup && Γ.all (·.2 != .ptrU32)
 
 /-! ## Short-Circuit Operands -/
 

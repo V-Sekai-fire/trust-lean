@@ -54,7 +54,11 @@ def parseTyped (src : String) : Option (CDecls × MicroCStmt) :=
 
 theorem declsOk_names {Γ : CDecls} (h : declsOk Γ = true) : ∀ p ∈ Γ, declNameOk p.1 = true := by
   simp only [declsOk, Bool.and_eq_true, List.all_eq_true] at h
-  exact h.1
+  exact h.1.1
+
+theorem declsOk_scalar {Γ : CDecls} (h : declsOk Γ = true) : ∀ p ∈ Γ, p.2 ≠ .ptrU32 := by
+  simp only [declsOk, Bool.and_eq_true, List.all_eq_true, bne_iff_ne, ne_eq] at h
+  exact h.2
 
 theorem declNameOk_spec {x : String} (h : declNameOk x = true) :
     (∃ c cs, x.toList = c :: cs ∧ c.isLower = true ∧ cs.all isValidCIdentChar = true) ∧
@@ -103,7 +107,7 @@ theorem declNameOk_safe {x : String} (h : declNameOk x = true) : VarNameSafe x :
 
 /-! ## Well-Typed Bodies Are Well-Formed -/
 
-theorem exprTy_wf (Γ : CDecls) (hΓ : declsOk Γ = true) :
+theorem exprTy_wf (Γ : CDecls) (hΓ : ∀ p ∈ Γ, declNameOk p.1 = true) :
     ∀ (e : MicroCExpr) (p : CType × Bool), exprTy Γ e = some p → WFExpr e ∧ NegLitDisam e
   | .litInt n, _, _ => ⟨.litInt n, trivial⟩
   | .litU32 n, _, _ => ⟨.litU32 n, trivial⟩
@@ -111,7 +115,7 @@ theorem exprTy_wf (Γ : CDecls) (hΓ : declsOk Γ = true) :
   | .varRef x, _, h => by
     simp only [exprTy, Option.map_eq_some_iff] at h
     obtain ⟨t, ht, -⟩ := h
-    exact ⟨declNameOk_wf (declsOk_names hΓ _ (lookup_mem ht)), trivial⟩
+    exact ⟨declNameOk_wf (hΓ _ (lookup_mem ht)), trivial⟩
   | .binOp op l r, _, h => by
     simp only [exprTy] at h
     split at h
@@ -145,7 +149,7 @@ theorem exprTy_wf (Γ : CDecls) (hΓ : declsOk Γ = true) :
     · exact absurd h (by simp)
   | .arrayAccess _ _, _, h => by simp [exprTy] at h
 
-theorem condTy_wf (Γ : CDecls) (hΓ : declsOk Γ = true) (c : MicroCExpr)
+theorem condTy_wf (Γ : CDecls) (hΓ : ∀ p ∈ Γ, declNameOk p.1 = true) (c : MicroCExpr)
     (h : condTy Γ c = true) : WFExpr c ∧ NegLitDisam c := by
   unfold condTy at h
   split at h
@@ -165,7 +169,7 @@ theorem stmtTy_wf (Γ : CDecls) (hΓ : declsOk Γ = true) :
       have hn := declsOk_names hΓ _ (lookup_mem hx)
       obtain ⟨c, cs, hcs, hα, hall⟩ := declNameOk_chars hn
       have hne : x ≠ "" := by intro h0; subst h0; simp at hcs
-      have ⟨hw, hd⟩ := exprTy_wf Γ hΓ e _ he
+      have ⟨hw, hd⟩ := exprTy_wf Γ (declsOk_names hΓ) e _ he
       refine ⟨.assign x e hne (by simp only [hcs, List.head_cons]; exact Or.inl hα) hall hw,
         hd, declNameOk_safe hn, ?_⟩
       cases e with
@@ -183,14 +187,14 @@ theorem stmtTy_wf (Γ : CDecls) (hΓ : declsOk Γ = true) :
   | b, .ite c t e, h => by
     simp only [stmtTy, Bool.and_eq_true] at h
     obtain ⟨⟨hc, ht⟩, he⟩ := h
-    have ⟨hwc, hdc⟩ := condTy_wf Γ hΓ c hc
+    have ⟨hwc, hdc⟩ := condTy_wf Γ (declsOk_names hΓ) c hc
     have ⟨hwt, hdt⟩ := stmtTy_wf Γ hΓ b t ht
     have ⟨hwe, hde⟩ := stmtTy_wf Γ hΓ b e he
     exact ⟨.ite c t e hwc hwt hwe, hdc, hdt, hde⟩
   | _, .while_ c body, h => by
     simp only [stmtTy, Bool.and_eq_true] at h
     obtain ⟨hc, hb⟩ := h
-    have ⟨hwc, hdc⟩ := condTy_wf Γ hΓ c hc
+    have ⟨hwc, hdc⟩ := condTy_wf Γ (declsOk_names hΓ) c hc
     have ⟨hwb, hdb⟩ := stmtTy_wf Γ hΓ true body hb
     exact ⟨.while_ c body hwc hwb, hdc, hdb⟩
   | _, .return_ _, h => by simp [stmtTy] at h
@@ -205,7 +209,7 @@ theorem pKeyword_append (ks rest : List Char) : pKeyword ks (ks ++ rest) = some 
   | nil => rfl
   | cons k ks ih => simp [pKeyword, ih]
 
-private theorem pIdent_typeName (t : CType) (rest : List Char) :
+private theorem pIdent_typeName (t : CType) (ht : t ≠ .ptrU32) (rest : List Char) :
     pIdent (t.name.toList ++ ' ' :: rest) = some (t.name, ' ' :: rest) := by
   have hsp : NoLeadingIdent (' ' :: rest) := Or.inr ⟨' ', rest, rfl, by decide, by decide, by decide⟩
   cases t with
@@ -218,16 +222,18 @@ private theorem pIdent_typeName (t : CType) (rest : List Char) :
   | bool =>
     have h : ("bool" : String).toList = ['b', 'o', 'o', 'l'] := by decide
     exact pIdent_exact "bool" _ (by decide) (by simp [h]) (by rw [h]; decide) hsp
+  | ptrU32 => exact absurd rfl ht
 
-private theorem ofName_name (t : CType) : CType.ofName t.name = some t := by
-  cases t <;> rfl
+private theorem ofName_name (t : CType) (ht : t ≠ .ptrU32) : CType.ofName t.name = some t := by
+  cases t <;> first | rfl | exact absurd rfl ht
 
 private theorem declTail_toList (x : String) (t : CType) :
     (declTail x t).toList = ' ' :: ('=' :: ' ' :: ((microCExprToString t.zero).toList ++
       ("; (void)" ++ x ++ ";\n").toList)) := by
   simp [declTail, String.toList_append]
 
-theorem pDecl_roundtrip (x : String) (t : CType) (hx : declNameOk x = true) (rest : List Char) :
+theorem pDecl_roundtrip (x : String) (t : CType) (hx : declNameOk x = true) (ht : t ≠ .ptrU32)
+    (rest : List Char) :
     pDecl ((declToString (x, t)).toList ++ rest) = some ((x, t), rest) := by
   obtain ⟨c, cs, hcs, hα, hall⟩ := declNameOk_chars hx
   have hne : x ≠ "" := by intro h0; subst h0; simp at hcs
@@ -236,8 +242,8 @@ theorem pDecl_roundtrip (x : String) (t : CType) (hx : declNameOk x = true) (res
     simp [declToString, String.toList_append]
   rw [hsplit]
   unfold pDecl
-  rw [pIdent_typeName]
-  simp only [ofName_name]
+  rw [pIdent_typeName t ht]
+  simp only [ofName_name t ht]
   have hnl : NoLeadingIdent ((declTail x t).toList ++ rest) := by
     rw [declTail_toList]; exact Or.inr ⟨' ', _, rfl, by decide, by decide, by decide⟩
   rw [pIdent_exact x _ hne (by simp only [hcs, List.head_cons]; exact Or.inl hα) hall hnl]
@@ -246,7 +252,8 @@ theorem pDecl_roundtrip (x : String) (t : CType) (hx : declNameOk x = true) (res
 private theorem pIdent_lbrace (rest : List Char) : pIdent ('{' :: rest) = none := by
   unfold pIdent; simp
 
-theorem pDecls_roundtrip (Γ : CDecls) (hΓ : ∀ p ∈ Γ, declNameOk p.1 = true) (rest : List Char) :
+theorem pDecls_roundtrip (Γ : CDecls) (hΓ : ∀ p ∈ Γ, declNameOk p.1 = true ∧ p.2 ≠ .ptrU32)
+    (rest : List Char) :
     ∀ n, Γ.length ≤ n →
       pDecls n ((declsToString Γ).toList ++ '{' :: rest) = (Γ, '{' :: rest) := by
   induction Γ with
@@ -259,7 +266,8 @@ theorem pDecls_roundtrip (Γ : CDecls) (hΓ : ∀ p ∈ Γ, declNameOk p.1 = tru
     intro n hn
     obtain ⟨k, rfl⟩ : ∃ k, n = k + 1 := ⟨n - 1, by simp at hn; omega⟩
     simp only [declsToString, String.toList_append, List.append_assoc]
-    rw [pDecls, pDecl_roundtrip d.1 d.2 (hΓ d (List.mem_cons_self ..))]
+    rw [pDecls, pDecl_roundtrip d.1 d.2 (hΓ d (List.mem_cons_self ..)).1
+      (hΓ d (List.mem_cons_self ..)).2]
     simp only []
     rw [ih (fun p hp => hΓ p (List.mem_cons_of_mem _ hp)) k (by simp at hn; omega)]
 
@@ -274,11 +282,10 @@ theorem declsToString_length (Γ : CDecls) : Γ.length ≤ (declsToString Γ).to
 
 /-! ## Typed Roundtrip -/
 
-/-- **Typed roundtrip**: the declarations and body of a well-typed program parse back. -/
-theorem master_typed_roundtrip (Γ : CDecls) (s : MicroCStmt) (h : WellTyped Γ s) :
-    parseTyped (printTyped Γ s) = some (Γ, s) := by
-  have ⟨hwf, hd⟩ := stmtTy_wf Γ h.1 false s h.2.1
-  have hnames := declsOk_names h.1
+/-- Scalar declarations with declared names, before a body `master_roundtrip` covers, parse back. -/
+theorem parseTyped_printTyped (Γ : CDecls) (s : MicroCStmt)
+    (hnames : ∀ p ∈ Γ, declNameOk p.1 = true ∧ p.2 ≠ .ptrU32) (hwf : WFStmt s)
+    (hd : NegLitDisamS s) : parseTyped (printTyped Γ s) = some (Γ, s) := by
   have hcs : (printTyped Γ s).toList =
       (declsToString Γ).toList ++ '{' :: ' ' :: ((microCToString s).toList ++ [' ', '}']) := by
     simp [printTyped, String.toList_append]
@@ -296,6 +303,12 @@ theorem master_typed_roundtrip (Γ : CDecls) (s : MicroCStmt) (h : WellTyped Γ 
     List.drop_left', List.take_left', String.ofList_toList, if_true]
   rw [master_roundtrip s hwf hd]
   rfl
+
+/-- **Typed roundtrip**: the declarations and body of a well-typed program parse back. -/
+theorem master_typed_roundtrip (Γ : CDecls) (s : MicroCStmt) (h : WellTyped Γ s) :
+    parseTyped (printTyped Γ s) = some (Γ, s) :=
+  have ⟨hwf, hd⟩ := stmtTy_wf Γ h.1 false s h.2.1
+  parseTyped_printTyped Γ s (fun p hp => ⟨declsOk_names h.1 p hp, declsOk_scalar h.1 p hp⟩) hwf hd
 
 /-! ## Non-Vacuity -/
 
