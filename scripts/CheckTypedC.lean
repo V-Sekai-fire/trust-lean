@@ -98,13 +98,15 @@ def compile (src : String) (dir : FilePath) (name : String) (obj : Bool) : IO (O
       #[(dir / s!"{name}.c").toString, "-o", (dir / name).toString] }
   pure (if out.exitCode == 0 then none else some out.stderr)
 
-/-- The first diagnostic flag clang names, e.g. `-Wparentheses-equality`. -/
+/-- The first error clang reports: its flag, e.g. `-Wparentheses-equality`, or its message. -/
 def firstFlag (diag : String) : String :=
-  match diag.splitOn "[-W" with
-  | _ :: rest :: _ => "-W" ++ ((rest.splitOn "]").head?.getD "")
-  | _ => match diag.splitOn "error: " with
-    | _ :: msg :: _ => (msg.splitOn "\n").head?.getD ""
-    | _ => diag
+  match diag.splitOn "error: " with
+  | _ :: rest :: _ =>
+    let msg := (rest.splitOn "\n").head?.getD ""
+    match msg.splitOn "[-W" with
+    | _ :: flag :: _ => "-W" ++ ((flag.splitOn "]").head?.getD "")
+    | _ => msg
+  | _ => diag
 
 inductive Verdict | agree | disagree (why : String)
 
@@ -374,14 +376,35 @@ def loopStmt : Stmt :=
 
 def program (cfg : CConfig) (fn : String) : String := generateCHeader cfg ++ "\n\n" ++ fn
 
+def checkExpr : BoolExpr := .or_ (.and_ (.var 0) (.var 1)) (.not_ (.var 0))
+
+/-- A local written a `bool` and then an `int64_t`, through the Core IR. -/
+def narrowStmt : Stmt :=
+  .seq (.assign (.user "t") (ux "a")) (.assign (.user "t") (.binOp .add (ux "x") (.litInt 1)))
+
+def narrowFn : String :=
+  generateCFunction { includePowerHelper := false } "p1" [("a", "bool"), ("x", "int64_t")]
+    narrowStmt (ux "t")
+
+/-- What `evalStmt` leaves in `t` from `a = true, x = 41`. -/
+def narrowModel : String :=
+  let env := (LowLevelEnv.default.update (.user "a") (.bool true)).update (.user "x") (.int 41)
+  match evalStmt 10 env narrowStmt with
+  | some (.normal, env') => showValue (env' (.user "t"))
+  | _ => "none"
+
+/-- `fn` with a `main` that prints `p1(true, 41)`. -/
+def narrowMain (fn : String) : String :=
+  program { includePowerHelper := false } fn ++
+    "\n#include <stdio.h>\nint main(void) {\n  printf(\"%lld\\n\", (long long)p1(true, 41));\n  return 0;\n}\n"
+
 /-- Programs the C backend emits, header and function, as the test modules emit them. -/
 def emittedPrograms : List (String × String) :=
   [("compute", Pipeline.emit (ArithExpr.mul (.add (.var 0) (.lit 3)) (.add (.var 1) (.lit 2)))
       (default : CConfig) "compute" [("v0", "int64_t"), ("v1", "int64_t")]),
-   ("check", Pipeline.emit (BoolExpr.or_ (.and_ (.var 0) (.var 1)) (.not_ (.var 0)))
-      (default : CConfig) "check" [("b0", "bool"), ("b1", "bool")]),
-   ("check with int64_t parameters", Pipeline.emit (BoolExpr.or_ (.and_ (.var 0) (.var 1)) (.not_ (.var 0)))
-      (default : CConfig) "check" [("b0", "int64_t"), ("b1", "int64_t")]),
+   ("check", Pipeline.emit checkExpr (default : CConfig) "check" [("b0", "bool"), ("b1", "bool")]),
+   ("check with int64_t parameters", Pipeline.emit checkExpr (default : CConfig) "check"
+      [("b0", "int64_t"), ("b1", "int64_t")]),
    ("constant", Pipeline.emit (ArithExpr.lit 42) (default : CConfig) "constant" []),
    ("deep", Pipeline.emit deepArith (default : CConfig) "deep" [("x", "int64_t")]),
    ("long long", Pipeline.emit (ArithExpr.lit 42) ({ useInt64 := false } : CConfig) "test_ll"
@@ -391,8 +414,11 @@ def emittedPrograms : List (String × String) :=
    ("keyword parameters", program default
       (generateCFunction default "compute" [("int", "int64_t"), ("for", "int64_t"),
         ("while", "int64_t")] .skip (.litInt 0))),
+   ("reserved and macro parameter names", program default (generateCFunction default "names"
+      (cReservedIdentifiers.map (·, "int64_t")) .skip (.litInt 0))),
    ("empty", program default (generateCFunction default "empty" [] .skip (.litInt 0))),
-   ("loop", program default (generateCFunction default "loop" [("n", "int64_t")] loopStmt (ux "acc")))]
+   ("loop", program default (generateCFunction default "loop" [("n", "int64_t")] loopStmt (ux "acc"))),
+   ("a local written a bool and then an int64_t", program { includePowerHelper := false } narrowFn)]
 
 def checkEmitted (progs : List (String × String)) : IO Nat :=
   IO.FS.withTempDir fun d => do
@@ -433,6 +459,20 @@ def checkTyped (cases : Array TypedCase) : IO Nat := do
     IO.println s!"{cases.size} typed programs: {values + reports} agree ({values} values, {reports} UBSan reports), {cases.size - values - reports} disagree"
     pure bad
 
+/-- Object-like macros the header defines with this compiler that `cReservedIdentifiers` leaves
+    out, other than the implementation's `_` names. A parameter or local with one of these names
+    expands. -/
+def unreservedMacros : IO (Except String (List String)) :=
+  IO.FS.withTempDir fun d => do
+    IO.FS.writeFile (d / "header.c") (generateCHeader default)
+    let out ← IO.Process.output {
+      cmd := (← systemClang).toString, args := #["-std=c11", "-dM", "-E", (d / "header.c").toString] }
+    if out.exitCode != 0 then return .error out.stderr
+    let names := (out.stdout.splitOn "\n").filterMap fun l => match l.splitOn " " with
+      | "#define" :: n :: _ => if n.contains '(' then none else some n
+      | _ => none
+    return .ok (names.filter fun n => !n.startsWith "_" && !cReservedIdentifiers.contains n)
+
 def report : IO UInt32 := do
   let (random, rejected) := randomCases
   IO.println s!"{random.length} random programs kept, {rejected} generated ill typed and not run"
@@ -440,7 +480,12 @@ def report : IO UInt32 := do
   let typedBad ← checkTyped cases
   let emittedBad ← checkEmitted emittedPrograms
   IO.println s!"{emittedPrograms.length} emitted programs: {emittedPrograms.length - emittedBad} compile, {emittedBad} fail"
-  pure (if typedBad == 0 && emittedBad == 0 && random.length == randomCount then 0 else 1)
+  let macrosBad ← match ← unreservedMacros with
+    | .error diag => do IO.println s!"FAIL clang -dM -E of the header: {diag}"; pure 1
+    | .ok ms => do
+      IO.println s!"{ms.length} object-like macros the header defines here are not reserved, so a parameter named one expands: {ms.take 8}"
+      pure 0
+  pure (if typedBad == 0 && emittedBad == 0 && macrosBad == 0 && random.length == randomCount then 0 else 1)
 
 /-! ## Controls -/
 
@@ -469,13 +514,34 @@ def unsuffixedCase : TypedCase :=
     body := seqs [.assign "x" (u 1),
       .assign "b" (bin .ltOp (bin .add (v "x") (.litInt 4294967295)) (u 1))] }
 
+/-- C skips `(p + 1) < q` because the left operand of `&&` is false; `evalTyped` evaluates it
+    and overflows, and the typing rejects it. -/
+def skippedCase : TypedCase :=
+  { label := "false && ((p + 1) < q) at p = INT64_MAX", decls := [("p", .i64), ("q", .i64), ("f", .bool)],
+    body := seqs [.assign "p" (.litInt 9223372036854775807),
+      .assign "f" (bin .land (.litBool false) (bin .ltOp (bin .add (v "p") (.litInt 1)) (v "q")))] }
+
+/-- Compiles and runs `src`; `none` when it prints `want`. -/
+def runPrints (src want : String) : IO (Option String) :=
+  IO.FS.withTempDir fun d => do
+    if let some diag := ← compile src d "main" false then return some (firstFlag diag)
+    let out ← IO.Process.output { cmd := (d / "main").toString }
+    let got := out.stdout.trimAscii.toString
+    pure (if out.exitCode == 0 && got == want then none
+      else some s!"C exit {out.exitCode} printed {got}, evalStmt gives {want}")
+
+def macroParam : String :=
+  program default (generateCFunction default "f" [("CHAR_BIT", "int64_t")] .skip (ux "CHAR_BIT"))
+
 def powerCase : TypedCase :=
   { label := "power(4294967296, 1)", decls := [("y", .i64)],
     body := seqs [.assign "y" (.litInt 4294967296), .assign "y" (bin .add (.powCall (v "y") 1) (.litInt 0))] }
 
 /-- Each control compiles or runs one program and says whether that must succeed. The failing
-    ones plant what this change removed: undeclared locals, `stmtToC`, doubled condition
-    parentheses, an unused helper, an unsuffixed `uint32_t` operand, and the old helper. -/
+    ones plant undeclared locals, `stmtToC`, doubled condition parentheses, an unused helper, an
+    unsuffixed `uint32_t` operand, a helper that squares past the last bit, a local typed by its
+    first write, parameters the body does not name, a macro as a parameter name, and an
+    undefined right operand of `&&`. -/
 def controls : List (String × Bool × IO (Option String)) :=
   let compileOnly (src : String) : IO (Option String) :=
     IO.FS.withTempDir fun d => do
@@ -507,7 +573,20 @@ def controls : List (String × Bool × IO (Option String)) :=
    ("an unsuffixed literal on a uint32_t operand disagrees", false,
       runOne unsuffixedCase (typedProgram #[unsuffixedCase])),
    ("the helper that squares past the last bit disagrees at power(4294967296, 1)", false,
-      runOne powerCase (typedProgram #[powerCase] (header := fun p => oldPowerHeader { includePowerHelper := p })))]
+      runOne powerCase (typedProgram #[powerCase] (header := fun p => oldPowerHeader { includePowerHelper := p }))),
+   ("a local written a bool and then an int64_t returns what evalStmt gives", true,
+      runPrints (narrowMain narrowFn) narrowModel),
+   ("the same local declared bool, its first write's type, returns 1", false,
+      runPrints (narrowMain (replaceAll narrowFn "int64_t t = 0;" "bool t = false;")) narrowModel),
+   ("check with int64_t parameters b0 and b1 compiles", true,
+      compileOnly (Pipeline.emit checkExpr (default : CConfig) "check" [("b0", "int64_t"), ("b1", "int64_t")])),
+   ("check with parameters a and b, which the body does not read, does not compile", false,
+      compileOnly (Pipeline.emit checkExpr (default : CConfig) "check" [("a", "int64_t"), ("b", "int64_t")])),
+   ("a parameter named CHAR_BIT compiles", true, compileOnly macroParam),
+   ("the same parameter printed as CHAR_BIT does not compile", false,
+      compileOnly (replaceAll macroParam (varNameToC (.user "CHAR_BIT")) "CHAR_BIT")),
+   ("a right operand of && that overflows where C skips it disagrees", false,
+      runOne skippedCase (typedProgram #[skippedCase]))]
 
 def selfTest : IO UInt32 := do
   let mut failed := 0
@@ -516,9 +595,10 @@ def selfTest : IO UInt32 := do
     let ok := got.isNone == want
     IO.println s!"{if ok then "ok  " else "FAIL"} {label}: {got.getD "succeeds"}"
     unless ok do failed := failed + 1
-  unless !decide (WellTyped unsuffixedCase.decls unsuffixedCase.body) do
-    failed := failed + 1
-    IO.println "FAIL the unsuffixed-literal control is well typed"
+  for c in [unsuffixedCase, skippedCase] do
+    if decide (WellTyped c.decls c.body) then
+      failed := failed + 1
+      IO.println s!"FAIL the control {c.label} is well typed"
   IO.println s!"{controls.length - failed} of {controls.length} controls hold"
   pure (if failed == 0 then 0 else 1)
 

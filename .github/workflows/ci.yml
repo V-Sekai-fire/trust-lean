@@ -94,7 +94,7 @@ jobs:
       - name: Printed casts and operators compute what the evaluators say under clang and UBSan
         run: lake env lean --run scripts/CheckCDiff.lean
 
-      - name: Undeclared locals, stmtToC, doubled condition parentheses and unsuffixed uint32_t literals fail the typed C harness
+      - name: Undeclared locals, stmtToC, doubled condition parentheses, unsuffixed uint32_t literals, narrowed locals, unread parameters, macro parameter names and undefined skipped operands fail the typed C harness
         run: lake env lean --run scripts/CheckTypedC.lean --self-test
 
       - name: Every emitted C program compiles under clang -Wall -Werror and typed programs compute what evalTyped says
