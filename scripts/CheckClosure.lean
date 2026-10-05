@@ -113,7 +113,7 @@ def selfTest : IO UInt32 := do
     let ok := got == want
     IO.println s!"{if ok then "ok  " else "FAIL"} {label}: got {repr got}"
     unless ok do failed := failed + 1
-  IO.println s!"{5 - failed} of 5 controls hold"
+  IO.println s!"{cases.length - failed} of {cases.length} controls hold"
   pure (if failed == 0 then 0 else 1)
 
 def main (args : List String) : IO UInt32 := do
