@@ -101,7 +101,8 @@ theorem evalMicroCExpr_deterministic (env : MicroCEnv) (e : MicroCExpr)
     This is the ideal semantics on unbounded integers: arithmetic never overflows and a
     shift takes its count mod 64 (`evalBinOp`). It is not what the printed C computes when a
     result leaves the C type or C11 leaves an operation undefined. `evalMicroC_int64` gives
-    `none` there and otherwise agrees with this evaluator (`Int64Agreement`);
+    `none` there for a binary or unary operation, wraps `powCall` with `wrapInt64`, and
+    otherwise agrees with this evaluator (`Int64Agreement`);
     `evalMicroC_uint32` and `evalMicroC_uint64` wrap modulo 2^w and give `none` for a shift
     count outside `[0, w)`.
 
