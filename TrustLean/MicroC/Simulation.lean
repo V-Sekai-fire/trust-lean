@@ -2,15 +2,16 @@
   Trust-Lean — Verified Code Generation Framework
   MicroC/Simulation.lean: Per-case simulation lemmas + master simulation theorem
 
-  N11.3 + N11.4 (v2.0.0): CRITICO GATE — proves stmtToMicroC_correct:
-  if evalStmt fuel env stmt = some (oc, env') with microCBridge env mcEnv,
-  then evalMicroC fuel mcEnv (stmtToMicroC stmt) = some (oc, mcEnv')
-  and microCBridge env' mcEnv'.
+  N11.3 + N11.4 (v2.0.0): CRITICO GATE — proves stmtToMicroC_correct_with S:
+  if evalStmtWith S.core fuel env stmt = some (oc, env') with microCBridge env mcEnv,
+  then evalMicroCWith S fuel mcEnv (stmtToMicroC stmt) = some (oc, mcEnv')
+  and microCBridge env' mcEnv', for every operator semantics S. stmtToMicroC_correct
+  (unbounded), stmtToMicroC_correct_uint32, _uint64 and _int64 are its instances.
 
   Proof strategy:
   1. WellFormedArrayBases + WellFormedBase predicates
   2. sim_while_helper: fuel induction with parameterized body IH
-  3. stmtToMicroC_correct: structural induction on Stmt
+  3. stmtToMicroC_correct_with: structural induction on Stmt
      - Simple cases inline (skip, break, continue, return, assign, call)
      - store/load: need WellFormedBase so the array name prints unchanged
      - seq/ite: use sub-IHs
@@ -25,7 +26,6 @@
 
 import TrustLean.MicroC.Bridge
 import TrustLean.MicroC.FuelMono
-import TrustLean.Core.Eval
 import TrustLean.Core.FuelMono
 
 set_option autoImplicit false
@@ -109,37 +109,37 @@ private theorem microCBridge_array_update {env : LowLevelEnv} {mcEnv : MicroCEnv
 
 /-- Simulation for while loops by fuel induction.
     Takes body simulation as parameter (from structural IH of master theorem). -/
-private theorem sim_while_helper
+private theorem sim_while_helper (S : MicroCOps)
     (cond : LowLevelExpr) (body : Stmt)
     (body_sim : ∀ {fuel : Nat} {env env' : LowLevelEnv} {mcEnv : MicroCEnv} {oc : Outcome},
-      evalStmt fuel env body = some (oc, env') →
+      evalStmtWith S.core fuel env body = some (oc, env') →
       microCBridge env mcEnv → oc ≠ .outOfFuel →
       WellFormedArrayBases body →
-      ∃ mcEnv', evalMicroC fuel mcEnv (stmtToMicroC body) = some (oc, mcEnv')
+      ∃ mcEnv', evalMicroCWith S fuel mcEnv (stmtToMicroC body) = some (oc, mcEnv')
         ∧ microCBridge env' mcEnv')
     {fuel : Nat} :
     ∀ {env env' : LowLevelEnv} {mcEnv : MicroCEnv} {oc : Outcome},
-    evalStmt fuel env (.while cond body) = some (oc, env') →
+    evalStmtWith S.core fuel env (.while cond body) = some (oc, env') →
     microCBridge env mcEnv → oc ≠ .outOfFuel →
     WellFormedArrayBases body →
-    ∃ mcEnv', evalMicroC fuel mcEnv (.while_ (exprToMicroC cond) (stmtToMicroC body))
+    ∃ mcEnv', evalMicroCWith S fuel mcEnv (.while_ (exprToMicroC cond) (stmtToMicroC body))
       = some (oc, mcEnv') ∧ microCBridge env' mcEnv' := by
   induction fuel with
   | zero =>
     intro env env' mcEnv oc h _ hoc _
-    simp only [evalStmt_while_zero] at h
+    simp only [evalStmtWith_while_zero] at h
     have : oc = .outOfFuel := by
       have := Option.some.inj h; exact (congrArg Prod.fst this).symm
     exact absurd this hoc
   | succ n ih_fuel =>
     intro env env' mcEnv oc h hb hoc hwf
-    simp only [evalStmt_while_succ] at h
-    simp only [evalMicroC_while_succ]
+    simp only [evalStmtWith_while_succ] at h
+    simp only [evalMicroCWith_while_succ]
     -- Bridge the condition: rewrite MicroC condition to Core condition
-    have hcb := exprToMicroC_bridge env mcEnv cond hb
+    have hcb := exprToMicroC_bridge_with S env mcEnv cond hb
     rw [← hcb]
-    -- Now both h and goal match on evalExpr env cond
-    generalize hec : evalExpr env cond = ec at h ⊢
+    -- Now both h and goal match on evalExprWith S.core env cond
+    generalize hec : evalExprWith S.core env cond = ec at h ⊢
     cases ec with
     | none => simp at h
     | some v =>
@@ -157,7 +157,7 @@ private theorem sim_while_helper
           exact ⟨mcEnv, rfl, hb⟩
         | true =>
           -- Evaluate body
-          generalize hbody : evalStmt n env body = rb at h
+          generalize hbody : evalStmtWith S.core n env body = rb at h
           cases rb with
           | none => simp at h
           | some p =>
@@ -202,37 +202,35 @@ private theorem sim_while_helper
 
 /-! ## Master Simulation Theorem (combined B5+B6) -/
 
-/-- Master simulation: stmtToMicroC preserves evalStmt semantics.
-    For any non-outOfFuel, non-None result of evalStmt, the translated
-    MicroC program produces the same result under the bridged environment.
-
-    This is THE gate theorem for Fase 10. -/
-theorem stmtToMicroC_correct
+/-- Master simulation for every operator semantics: for any non-outOfFuel, non-None result of
+    `evalStmtWith S.core`, the translated MicroC program produces the same result under
+    `evalMicroCWith S` and the bridged environment. -/
+theorem stmtToMicroC_correct_with (S : MicroCOps)
     {fuel : Nat} {env env' : LowLevelEnv} {mcEnv : MicroCEnv}
     {stmt : Stmt} {oc : Outcome}
-    (heval : evalStmt fuel env stmt = some (oc, env'))
+    (heval : evalStmtWith S.core fuel env stmt = some (oc, env'))
     (hb : microCBridge env mcEnv)
     (hoc : oc ≠ .outOfFuel)
     (hwf : WellFormedArrayBases stmt) :
-    ∃ mcEnv', evalMicroC fuel mcEnv (stmtToMicroC stmt) = some (oc, mcEnv')
+    ∃ mcEnv', evalMicroCWith S fuel mcEnv (stmtToMicroC stmt) = some (oc, mcEnv')
       ∧ microCBridge env' mcEnv' := by
   induction stmt generalizing fuel env env' mcEnv oc with
   | skip =>
-    simp only [evalStmt_skip] at heval
+    simp only [evalStmtWith_skip] at heval
     have := Option.some.inj heval
     have hoc_eq : oc = .normal := (congrArg Prod.fst this).symm
     have henv_eq : env' = env := by have := congrArg Prod.snd this; simp at this; exact this.symm
     subst hoc_eq; subst henv_eq
     exact ⟨mcEnv, by simp, hb⟩
   | break_ =>
-    simp only [evalStmt_break] at heval
+    simp only [evalStmtWith_break] at heval
     have := Option.some.inj heval
     have hoc_eq : oc = .break_ := (congrArg Prod.fst this).symm
     have henv_eq : env' = env := by have := congrArg Prod.snd this; simp at this; exact this.symm
     subst hoc_eq; subst henv_eq
     exact ⟨mcEnv, by simp, hb⟩
   | continue_ =>
-    simp only [evalStmt_continue] at heval
+    simp only [evalStmtWith_continue] at heval
     have := Option.some.inj heval
     have hoc_eq : oc = .continue_ := (congrArg Prod.fst this).symm
     have henv_eq : env' = env := by have := congrArg Prod.snd this; simp at this; exact this.symm
@@ -241,18 +239,18 @@ theorem stmtToMicroC_correct
   | return_ re =>
     cases re with
     | none =>
-      simp only [evalStmt_return_none] at heval
+      simp only [evalStmtWith_return_none] at heval
       have := Option.some.inj heval
       have hoc_eq : oc = .return_ none := (congrArg Prod.fst this).symm
       have henv_eq : env' = env := by have := congrArg Prod.snd this; simp at this; exact this.symm
       subst hoc_eq; subst henv_eq
       exact ⟨mcEnv, by simp, hb⟩
     | some e =>
-      simp only [evalStmt_return_some] at heval
-      simp only [stmtToMicroC_return, Option.map, evalMicroC_return_some]
-      have hcb := exprToMicroC_bridge env mcEnv e hb
+      simp only [evalStmtWith_return_some] at heval
+      simp only [stmtToMicroC_return, Option.map, evalMicroCWith_return_some]
+      have hcb := exprToMicroC_bridge_with S env mcEnv e hb
       rw [← hcb]
-      generalize hev : evalExpr env e = ev at heval ⊢
+      generalize hev : evalExprWith S.core env e = ev at heval ⊢
       cases ev with
       | none => simp at heval
       | some v =>
@@ -263,11 +261,11 @@ theorem stmtToMicroC_correct
         subst hoc_eq; subst henv_eq
         exact ⟨mcEnv, rfl, hb⟩
   | assign name expr =>
-    simp only [evalStmt_assign] at heval
-    simp only [stmtToMicroC_assign, evalMicroC_assign]
-    have hcb := exprToMicroC_bridge env mcEnv expr hb
+    simp only [evalStmtWith_assign] at heval
+    simp only [stmtToMicroC_assign, evalMicroCWith_assign]
+    have hcb := exprToMicroC_bridge_with S env mcEnv expr hb
     rw [← hcb]
-    generalize hev : evalExpr env expr = ev at heval ⊢
+    generalize hev : evalExprWith S.core env expr = ev at heval ⊢
     cases ev with
     | none => simp at heval
     | some v =>
@@ -280,7 +278,7 @@ theorem stmtToMicroC_correct
       exact ⟨mcEnv.update (varNameToC name) v, rfl,
         microCBridge_update hb name v⟩
   | store base idx val =>
-    simp only [evalStmt_store] at heval
+    simp only [evalStmtWith_store] at heval
     -- Extract getArrayName result from heval
     generalize hgn : getArrayName base = gn at heval
     cases gn with
@@ -290,18 +288,18 @@ theorem stmtToMicroC_correct
       obtain ⟨hbase_eq, hsn⟩ := wf_base_is_user base name hgn hwf
       subst hbase_eq
       -- Bridge idx and val expressions
-      have hidx := exprToMicroC_bridge env mcEnv idx hb
-      have hval := exprToMicroC_bridge env mcEnv val hb
+      have hidx := exprToMicroC_bridge_with S env mcEnv idx hb
+      have hval := exprToMicroC_bridge_with S env mcEnv val hb
       -- Simplify MicroC side
       simp only [stmtToMicroC_store, exprToMicroC_varRef]
       rw [hsn]
-      simp only [evalMicroC, getMicroCArrayName]
+      simp only [evalMicroCWith, getMicroCArrayName]
       rw [← hidx, ← hval]
-      generalize hei : evalExpr env idx = ei at heval ⊢
+      generalize hei : evalExprWith S.core env idx = ei at heval ⊢
       cases ei with
       | none => simp at heval
       | some vi =>
-        generalize hev : evalExpr env val = ev at heval ⊢
+        generalize hev : evalExprWith S.core env val = ev at heval ⊢
         cases vi with
         | bool _ => simp at heval
         | int i =>
@@ -317,19 +315,19 @@ theorem stmtToMicroC_correct
             exact ⟨mcEnv.update (name ++ "[" ++ toString i ++ "]") vv, rfl,
               microCBridge_array_update hb name i vv⟩
   | load var base idx =>
-    simp only [evalStmt_load] at heval
+    simp only [evalStmtWith_load] at heval
     generalize hgn : getArrayName base = gn at heval
     cases gn with
     | none => simp at heval
     | some name =>
       obtain ⟨hbase_eq, hsn⟩ := wf_base_is_user base name hgn hwf
       subst hbase_eq
-      have hidx := exprToMicroC_bridge env mcEnv idx hb
+      have hidx := exprToMicroC_bridge_with S env mcEnv idx hb
       simp only [stmtToMicroC_load, exprToMicroC_varRef]
       rw [hsn]
-      simp only [evalMicroC, getMicroCArrayName]
+      simp only [evalMicroCWith, getMicroCArrayName]
       rw [← hidx]
-      generalize hei : evalExpr env idx = ei at heval ⊢
+      generalize hei : evalExprWith S.core env idx = ei at heval ⊢
       cases ei with
       | none => simp at heval
       | some vi =>
@@ -354,13 +352,13 @@ theorem stmtToMicroC_correct
           rw [← hval_bridge]
           exact microCBridge_update hb var (env (.array name i))
   | call result fname args =>
-    simp only [evalStmt_call] at heval
+    simp only [evalStmtWith_call] at heval
     exact absurd heval (by simp)
   | seq s1 s2 ih1 ih2 =>
-    simp only [evalStmt_seq] at heval
-    simp only [stmtToMicroC_seq, evalMicroC_seq]
+    simp only [evalStmtWith_seq] at heval
+    simp only [stmtToMicroC_seq, evalMicroCWith_seq]
     obtain ⟨hwf1, hwf2⟩ := hwf
-    generalize hs1 : evalStmt fuel env s1 = r1 at heval
+    generalize hs1 : evalStmtWith S.core fuel env s1 = r1 at heval
     cases r1 with
     | none => simp at heval
     | some p =>
@@ -404,12 +402,12 @@ theorem stmtToMicroC_correct
           have := Option.some.inj heval; exact (congrArg Prod.fst this).symm
         exact absurd this hoc
   | ite cond thenB elseB ih_then ih_else =>
-    simp only [evalStmt_ite] at heval
-    simp only [stmtToMicroC_ite, evalMicroC_ite]
+    simp only [evalStmtWith_ite] at heval
+    simp only [stmtToMicroC_ite, evalMicroCWith_ite]
     obtain ⟨hwf_then, hwf_else⟩ := hwf
-    have hcb := exprToMicroC_bridge env mcEnv cond hb
+    have hcb := exprToMicroC_bridge_with S env mcEnv cond hb
     rw [← hcb]
-    generalize hec : evalExpr env cond = ec at heval ⊢
+    generalize hec : evalExprWith S.core env cond = ec at heval ⊢
     cases ec with
     | none => simp at heval
     | some v =>
@@ -420,7 +418,7 @@ theorem stmtToMicroC_correct
         | true => exact ih_then heval hb hoc hwf_then
         | false => exact ih_else heval hb hoc hwf_else
   | «while» cond body ih_body =>
-    exact sim_while_helper cond body
+    exact sim_while_helper S cond body
       (fun {f} {e} {e'} {me} {o} he hbe hoe hwe =>
         ih_body he hbe hoe hwe)
       heval hb hoc hwf
@@ -428,16 +426,16 @@ theorem stmtToMicroC_correct
     obtain ⟨hwf_init, hwf_body, hwf_step⟩ := hwf
     cases fuel with
     | zero =>
-      simp only [evalStmt_for_zero] at heval
+      simp only [evalStmtWith_for_zero] at heval
       have : oc = .outOfFuel := by
         have := Option.some.inj heval; exact (congrArg Prod.fst this).symm
       exact absurd this hoc
     | succ n =>
-      simp only [evalStmt_for_succ] at heval
-      simp only [stmtToMicroC_for, evalMicroC_seq]
-      -- Core: evalStmt n env init, then evalStmt n env' (.while cond (.seq body step))
-      -- MicroC: evalMicroC (n+1) mcEnv (stmtToMicroC init), then while
-      generalize hinit_eval : evalStmt n env init = r_init at heval
+      simp only [evalStmtWith_for_succ] at heval
+      simp only [stmtToMicroC_for, evalMicroCWith_seq]
+      -- Core: evalStmtWith S.core n env init, then the while at fuel n
+      -- MicroC: evalMicroCWith S (n+1) mcEnv (stmtToMicroC init), then while
+      generalize hinit_eval : evalStmtWith S.core n env init = r_init at heval
       cases r_init with
       | none => simp at heval
       | some p =>
@@ -445,26 +443,26 @@ theorem stmtToMicroC_correct
         cases o_init with
         | normal =>
           -- Init succeeded normally
-          -- IH for init at fuel n → evalMicroC n mcEnv (stmtToMicroC init) = some (.normal, mcEnvInit)
+          -- IH for init at fuel n → evalMicroCWith S n mcEnv (stmtToMicroC init) = some (.normal, mcEnvInit)
           obtain ⟨mcInit, hmcInit, hbInit⟩ := ih_init hinit_eval hb (by simp) hwf_init
           -- Boost to fuel n+1 via fuel_mono
-          have hmcInit' := evalMicroC_fuel_mono hmcInit (Nat.le_succ n)
+          have hmcInit' := evalMicroCWith_fuel_mono_full hmcInit (Nat.le_succ n) (by simp)
           rw [hmcInit']
-          -- Now need: evalMicroC (n+1) mcInit (while_ condMC (seq bodyMC stepMC)) = some (oc, mcEnv')
-          -- Core has: evalStmt n e_init (.while cond (.seq body step)) = some (oc, env')
+          -- Now need: the MicroC while from mcInit at fuel n+1 gives (oc, mcEnv')
+          -- Core has: evalStmtWith S.core n e_init (.while cond (.seq body step)) = some (oc, env')
           -- Build compound body IH for (.seq body step)
           have seq_sim : ∀ {f : Nat} {e e' : LowLevelEnv} {me : MicroCEnv} {o : Outcome},
-              evalStmt f e (.seq body step) = some (o, e') →
+              evalStmtWith S.core f e (.seq body step) = some (o, e') →
               microCBridge e me → o ≠ .outOfFuel →
               WellFormedArrayBases (.seq body step) →
-              ∃ me', evalMicroC f me (stmtToMicroC (.seq body step)) = some (o, me')
+              ∃ me', evalMicroCWith S f me (stmtToMicroC (.seq body step)) = some (o, me')
                 ∧ microCBridge e' me' := by
             intro f e e' me o he hbe hoe hwe
             obtain ⟨hwb, hws⟩ := hwe
             -- This IS the seq case of the master theorem applied to body and step
-            simp only [evalStmt_seq] at he
-            simp only [stmtToMicroC_seq, evalMicroC_seq]
-            generalize hbs : evalStmt f e body = rb at he
+            simp only [evalStmtWith_seq] at he
+            simp only [stmtToMicroC_seq, evalMicroCWith_seq]
+            generalize hbs : evalStmtWith S.core f e body = rb at he
             cases rb with
             | none => simp at he
             | some pb =>
@@ -507,12 +505,12 @@ theorem stmtToMicroC_correct
                   have := Option.some.inj he; exact (congrArg Prod.fst this).symm
                 exact absurd this hoe
           -- Use sim_while_helper at fuel n with compound seq IH
-          have while_at_n := sim_while_helper cond (.seq body step) seq_sim
+          have while_at_n := sim_while_helper S cond (.seq body step) seq_sim
             heval hbInit hoc ⟨hwf_body, hwf_step⟩
           -- Get MicroC result at fuel n
           obtain ⟨mcFinal, hmcWhile_n, hbFinal⟩ := while_at_n
           -- Boost while from fuel n to n+1 via fuel_mono
-          have hmcWhile := evalMicroC_fuel_mono_full hmcWhile_n (Nat.le_succ n) hoc
+          have hmcWhile := evalMicroCWith_fuel_mono_full hmcWhile_n (Nat.le_succ n) hoc
           exact ⟨mcFinal, hmcWhile, hbFinal⟩
         | break_ | continue_ | return_ _ =>
           -- Init returned non-normal → for_ propagates directly
@@ -524,7 +522,7 @@ theorem stmtToMicroC_correct
           subst henv_eq
           obtain ⟨mcInit, hmcInit, hbInit⟩ := ih_init hinit_eval hb
             (by subst hoc_eq; exact hoc) hwf_init
-          have hmcInit' := evalMicroC_fuel_mono_full hmcInit (Nat.le_succ n)
+          have hmcInit' := evalMicroCWith_fuel_mono_full hmcInit (Nat.le_succ n)
             (by subst hoc_eq; exact hoc)
           rw [hmcInit']
           subst hoc_eq
@@ -534,6 +532,86 @@ theorem stmtToMicroC_correct
           have : oc = .outOfFuel := by
             have := Option.some.inj heval; exact (congrArg Prod.fst this).symm
           exact absurd this hoc
+
+/-- Master simulation: stmtToMicroC preserves evalStmt semantics.
+    For any non-outOfFuel, non-None result of evalStmt, the translated
+    MicroC program produces the same result under the bridged environment.
+
+    This is THE gate theorem for Fase 10. -/
+theorem stmtToMicroC_correct
+    {fuel : Nat} {env env' : LowLevelEnv} {mcEnv : MicroCEnv}
+    {stmt : Stmt} {oc : Outcome}
+    (heval : evalStmt fuel env stmt = some (oc, env'))
+    (hb : microCBridge env mcEnv)
+    (hoc : oc ≠ .outOfFuel)
+    (hwf : WellFormedArrayBases stmt) :
+    ∃ mcEnv', evalMicroC fuel mcEnv (stmtToMicroC stmt) = some (oc, mcEnv')
+      ∧ microCBridge env' mcEnv' := by
+  rw [evalStmt_eq_with, ← MicroCOps.int_core] at heval
+  simp only [evalMicroC_eq_with]
+  exact stmtToMicroC_correct_with .int heval hb hoc hwf
+
+/-- `stmtToMicroC` preserves the `uint32_t` semantics: Core evaluated with the operators of
+    `evalMicroC_uint32` and the translated statement under `evalMicroC_uint32` agree. -/
+theorem stmtToMicroC_correct_uint32
+    {fuel : Nat} {env env' : LowLevelEnv} {mcEnv : MicroCEnv}
+    {stmt : Stmt} {oc : Outcome}
+    (heval : evalStmtWith MicroCOps.u32.core fuel env stmt = some (oc, env'))
+    (hb : microCBridge env mcEnv)
+    (hoc : oc ≠ .outOfFuel)
+    (hwf : WellFormedArrayBases stmt) :
+    ∃ mcEnv', evalMicroC_uint32 fuel mcEnv (stmtToMicroC stmt) = some (oc, mcEnv')
+      ∧ microCBridge env' mcEnv' := by
+  simp only [evalMicroC_uint32_eq_with]
+  exact stmtToMicroC_correct_with .u32 heval hb hoc hwf
+
+/-- `stmtToMicroC` preserves the `uint64_t` semantics of `evalMicroC_uint64`. -/
+theorem stmtToMicroC_correct_uint64
+    {fuel : Nat} {env env' : LowLevelEnv} {mcEnv : MicroCEnv}
+    {stmt : Stmt} {oc : Outcome}
+    (heval : evalStmtWith MicroCOps.u64.core fuel env stmt = some (oc, env'))
+    (hb : microCBridge env mcEnv)
+    (hoc : oc ≠ .outOfFuel)
+    (hwf : WellFormedArrayBases stmt) :
+    ∃ mcEnv', evalMicroC_uint64 fuel mcEnv (stmtToMicroC stmt) = some (oc, mcEnv')
+      ∧ microCBridge env' mcEnv' := by
+  simp only [evalMicroC_uint64_eq_with]
+  exact stmtToMicroC_correct_with .u64 heval hb hoc hwf
+
+/-- `stmtToMicroC` preserves the `int64_t` semantics of `evalMicroC_int64`, where an operation
+    C11 leaves undefined is `none` on both sides. -/
+theorem stmtToMicroC_correct_int64
+    {fuel : Nat} {env env' : LowLevelEnv} {mcEnv : MicroCEnv}
+    {stmt : Stmt} {oc : Outcome}
+    (heval : evalStmtWith MicroCOps.i64.core fuel env stmt = some (oc, env'))
+    (hb : microCBridge env mcEnv)
+    (hoc : oc ≠ .outOfFuel)
+    (hwf : WellFormedArrayBases stmt) :
+    ∃ mcEnv', evalMicroC_int64 fuel mcEnv (stmtToMicroC stmt) = some (oc, mcEnv')
+      ∧ microCBridge env' mcEnv' := by
+  simp only [evalMicroC_int64_eq_with]
+  exact stmtToMicroC_correct_with .i64 heval hb hoc hwf
+
+/-! ## Non-Vacuity: the Instances Differ at the Wrap -/
+
+/-- `x = 4294967295 + 1` as a Core statement. -/
+def wrapAssign : Stmt := .assign (.user "x") (.binOp .add (.litInt 4294967295) (.litInt 1))
+
+/-- Under the `uint32_t` semantics the Core statement runs, so `stmtToMicroC_correct_uint32`
+    applies, and the translated statement leaves `x = 0` under `evalMicroC_uint32`; the
+    unbounded `evalStmt` leaves `x = 4294967296`. -/
+theorem stmtToMicroC_uint32_wraps :
+    (∃ mcEnv', evalMicroC_uint32 0 MicroCEnv.default (stmtToMicroC wrapAssign) =
+      some (.normal, mcEnv') ∧ mcEnv' (varNameToC (.user "x")) = .int 0) ∧
+    (evalStmt 0 LowLevelEnv.default wrapAssign).map (fun r => r.2 (.user "x")) =
+      some (.int 4294967296) := by
+  refine ⟨?_, by simp [wrapAssign, LowLevelEnv.update]⟩
+  have heval : evalStmtWith MicroCOps.u32.core 0 LowLevelEnv.default wrapAssign =
+      some (.normal, LowLevelEnv.default.update (.user "x") (.int 0)) := by
+    rw [wrapAssign, evalStmtWith_assign]; rfl
+  obtain ⟨mcEnv', hrun, hb⟩ :=
+    stmtToMicroC_correct_uint32 heval microCBridge_default (by decide) trivial
+  exact ⟨mcEnv', hrun, by rw [← hb]; simp [LowLevelEnv.update]⟩
 
 /-! ## WellFormedArrayBases: key fact (autopsy fix) -/
 

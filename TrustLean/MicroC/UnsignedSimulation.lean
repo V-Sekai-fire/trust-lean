@@ -6,6 +6,8 @@
   `+ - *` and negation wrap modulo 2^32, `&&& ||| ^^^` act on the bits, and a shift is defined
   only for a count below 32. On every statement of `U32Subset`, `evalMicroC_uint32` started from
   the encoded store equals `evalS32` encoded, at every fuel, with no overflow side condition.
+  `stmtToMicroC_correct_uint32` and `stmtToMicroC_correct_uint64` (Simulation.lean) carry a Core
+  statement to MicroC under the same operators.
 -/
 import TrustLean.MicroC.UnsignedAgreement
 import TrustLean.MicroC.TypedEval

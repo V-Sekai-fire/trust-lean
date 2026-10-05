@@ -13,8 +13,7 @@
 -/
 
 import TrustLean.MicroC.Translation
-import TrustLean.MicroC.Eval
-import TrustLean.Core.Eval
+import TrustLean.MicroC.EvalWith
 
 set_option autoImplicit false
 
@@ -62,50 +61,37 @@ theorem microCBridge_update {env : LowLevelEnv} {mcEnv : MicroCEnv}
 
 /-! ## Expression Bridge -/
 
-/-- Expression bridge: evaluating a Core expression in env equals
-    evaluating the translated MicroC expression in the bridged mcEnv.
-
-    This is the key semantic preservation theorem for expressions.
-    No fuel needed — both evalExpr and evalMicroCExpr are structural. -/
-theorem exprToMicroC_bridge (env : LowLevelEnv) (mcEnv : MicroCEnv)
+/-- Expression bridge for every operator semantics: evaluating a Core expression in env with
+    `S.core` equals evaluating the translated MicroC expression in the bridged mcEnv with `S`.
+    No fuel needed — both evaluators are structural. -/
+theorem exprToMicroC_bridge_with (S : MicroCOps) (env : LowLevelEnv) (mcEnv : MicroCEnv)
     (e : LowLevelExpr) (hb : microCBridge env mcEnv) :
-    evalExpr env e = evalMicroCExpr mcEnv (exprToMicroC e) := by
+    evalExprWith S.core env e = evalMicroCExprWith S mcEnv (exprToMicroC e) := by
   induction e with
   | litInt n => rfl
   | litBool b => rfl
   | varRef v =>
-    simp only [evalExpr_varRef, exprToMicroC_varRef, evalMicroCExpr_varRef]
+    simp only [evalExprWith, exprToMicroC_varRef, evalMicroCExprWith]
     exact congrArg some (hb v)
   | binOp op e1 e2 ih1 ih2 =>
-    simp only [evalExpr_binOp, exprToMicroC_binOp, evalMicroCExpr_binOp]
-    rw [ih1, ih2]
-    generalize evalMicroCExpr mcEnv (exprToMicroC e1) = r1
-    generalize evalMicroCExpr mcEnv (exprToMicroC e2) = r2
-    cases r1 with
-    | none => rfl
-    | some v1 =>
-      cases r2 with
-      | none => rfl
-      | some v2 => exact (evalMicroCBinOp_eq_evalBinOp op v1 v2).symm
+    simp only [evalExprWith, exprToMicroC_binOp, evalMicroCExprWith, ih1, ih2]; rfl
   | unaryOp op e ih =>
-    simp only [evalExpr_unaryOp, exprToMicroC_unaryOp, evalMicroCExpr_unaryOp]
-    rw [ih]
-    generalize evalMicroCExpr mcEnv (exprToMicroC e) = r
-    cases r with
-    | none => rfl
-    | some v => exact (evalMicroCUnaryOp_eq_evalUnaryOp op v).symm
+    simp only [evalExprWith, exprToMicroC_unaryOp, evalMicroCExprWith, ih]; rfl
   | powCall base n ih =>
-    simp only [evalExpr_powCall, exprToMicroC_powCall, evalMicroCExpr_powCall]
-    rw [ih]
-    generalize evalMicroCExpr mcEnv (exprToMicroC base) = r
-    cases r with
-    | none => rfl
-    | some v => cases v with
-      | int _ => rfl
-      | bool _ => rfl
+    simp only [evalExprWith, exprToMicroC_powCall, evalMicroCExprWith, ih]; rfl
   | addrOf v =>
-    simp only [evalExpr_addrOf, exprToMicroC_addrOf, evalMicroCExpr_varRef]
+    simp only [evalExprWith, exprToMicroC_addrOf, evalMicroCExprWith]
     exact congrArg some (hb v)
+
+/-- Expression bridge: evaluating a Core expression in env equals
+    evaluating the translated MicroC expression in the bridged mcEnv.
+
+    This is the key semantic preservation theorem for expressions. -/
+theorem exprToMicroC_bridge (env : LowLevelEnv) (mcEnv : MicroCEnv)
+    (e : LowLevelExpr) (hb : microCBridge env mcEnv) :
+    evalExpr env e = evalMicroCExpr mcEnv (exprToMicroC e) := by
+  rw [evalExpr_eq_with, evalMicroCExpr_eq_with, ← MicroCOps.int_core]
+  exact exprToMicroC_bridge_with .int env mcEnv e hb
 
 /-! ## Array Name Bridge -/
 

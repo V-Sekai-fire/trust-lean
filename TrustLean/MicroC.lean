@@ -6,6 +6,7 @@
 -- v2.0.0 modules
 import TrustLean.MicroC.AST
 import TrustLean.MicroC.Eval
+import TrustLean.MicroC.EvalWith
 import TrustLean.MicroC.FuelMono
 import TrustLean.MicroC.PrettyPrint
 import TrustLean.MicroC.Parser
