@@ -1185,7 +1185,7 @@ private theorem roundtrip_combined_rust (s : MicroCStmt) (hs : WFStmtRust s)
             some (' ' :: '=' :: ' ' :: ((microRustExprToString val).toList ++ (';' :: rest'))) := by
           have := matchLiteral_exact ['a', 's', ' ', 'u', 's', 'i', 'z', 'e', ']']
             (' ' :: '=' :: ' ' :: ((microRustExprToString val).toList ++ (';' :: rest')))
-          convert this using 2
+          exact this
         rw [hml]; simp only []
         rw [skipWsR_space_eq_space]; simp only []
         -- Parse val expression
@@ -1263,7 +1263,7 @@ private theorem roundtrip_combined_rust (s : MicroCStmt) (hs : WFStmtRust s)
             ('a' :: 's' :: ' ' :: 'u' :: 's' :: 'i' :: 'z' :: 'e' :: ']' :: ';' :: rest') =
             some (';' :: rest') := by
           have := matchLiteral_exact ['a', 's', ' ', 'u', 's', 'i', 'z', 'e', ']'] (';' :: rest')
-          convert this using 2
+          exact this
         rw [hml]
         simp only [skipWsR_nonws ';' _ ⟨by decide, by decide, by decide, by decide⟩]
     exact ⟨fun _ => hPartA rest,
