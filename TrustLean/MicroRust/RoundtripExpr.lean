@@ -1424,7 +1424,7 @@ theorem rustExpr_roundtrip_with_rest (e : MicroCExpr) (he : WFExprRust e)
             ('a' :: 's' :: ' ' :: 'u' :: 's' :: 'i' :: 'z' :: 'e' :: ']' :: rest) =
             some rest := by
           have := matchLiteral_exact ['a', 's', ' ', 'u', 's', 'i', 'z', 'e', ']'] rest
-          convert this using 2
+          exact this
         rw [hml]
 
 /-! ## Top-Level Expression Roundtrip Theorem -/
